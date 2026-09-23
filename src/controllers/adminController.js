@@ -212,15 +212,10 @@ export async function getAdminUsers(req, res) {
 | Activate / Deactivate User
 |--------------------------------------------------------------------------
 */
-
 export async function updateUserStatus(req, res) {
   try {
     const { id } = req.params;
-
-    const {
-      active,
-      reason,
-    } = req.body;
+    const { isActive, reason } = req.body;
 
     if (!id) {
       return res.status(400).json({
@@ -229,43 +224,37 @@ export async function updateUserStatus(req, res) {
       });
     }
 
-    if (typeof active !== "boolean") {
+    if (typeof isActive !== "boolean") {
       return res.status(400).json({
         success: false,
-        message: "Active must be true or false",
+        message: "isActive must be true or false",
       });
     }
 
-    if (id === req.admin.id) {
+    // Prevent an administrator from accidentally
+    // deactivating their own account.
+    if (req.admin?.id === id) {
       return res.status(400).json({
         success: false,
-        message:
-          "You cannot deactivate your own administrator account",
+        message: "You cannot deactivate your own administrator account",
       });
     }
 
     const updateData = {
-      is_active: active,
+      is_active: isActive,
       updated_at: new Date().toISOString(),
     };
 
-    if (active) {
+    if (isActive) {
       updateData.banned_at = null;
       updateData.banned_reason = null;
     } else {
-      updateData.banned_at =
-        new Date().toISOString();
-
+      updateData.banned_at = new Date().toISOString();
       updateData.banned_reason =
-        typeof reason === "string"
-          ? reason.trim() || null
-          : null;
+        reason?.trim() || "Deactivated by administrator";
     }
 
-    const {
-      data: user,
-      error,
-    } = await supabase
+    const { data: user, error } = await supabase
       .from("profiles")
       .update(updateData)
       .eq("id", id)
@@ -275,6 +264,10 @@ export async function updateUserStatus(req, res) {
         username,
         first_name,
         last_name,
+        photo_url,
+        balance,
+        total_earned,
+        total_spent,
         is_active,
         is_admin,
         banned_at,
@@ -284,31 +277,46 @@ export async function updateUserStatus(req, res) {
 
     if (error) {
       console.error(
-        "Update user status error:",
+        "Admin user status update error:",
         error
       );
 
       return res.status(500).json({
         success: false,
-        message: "Could not update user",
+        message: "Could not update user status",
       });
     }
 
-    await supabase
+    // Record the administrator action.
+    const { error: logError } = await supabase
       .from("admin_logs")
       .insert({
         admin_user_id: req.admin.id,
-        action: active
-          ? "activate_user"
-          : "deactivate_user",
+        action: isActive
+          ? "user_activated"
+          : "user_deactivated",
         target_user_id: id,
         details: {
-          reason: reason || null,
+          reason:
+            reason?.trim() ||
+            (isActive
+              ? "User activated by administrator"
+              : "Deactivated by administrator"),
         },
       });
 
+    if (logError) {
+      console.error(
+        "Admin user status log error:",
+        logError
+      );
+    }
+
     return res.json({
       success: true,
+      message: isActive
+        ? "User activated successfully"
+        : "User deactivated successfully",
       user,
     });
   } catch (error) {
@@ -319,7 +327,7 @@ export async function updateUserStatus(req, res) {
 
     return res.status(500).json({
       success: false,
-      message: "Could not update user",
+      message: "Server error while updating user status",
     });
   }
 }
