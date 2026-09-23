@@ -1,7 +1,7 @@
 
 import express from "express";
 
-import { telegramAuth } from "../middleware/telegramAuth.js";
+import { adminTelegramAuth } from "../middleware/adminTelegramAuth.js";
 import { adminAuth } from "../middleware/adminAuth.js";
 
 import {
@@ -23,9 +23,8 @@ const router = express.Router();
 | Admin Authentication
 |--------------------------------------------------------------------------
 */
-
 router.use(
-  telegramAuth,
+  adminTelegramAuth,
   adminAuth
 );
 
