@@ -17,87 +17,108 @@ const supabase = createClient(
 
 export async function getAdminDashboard(req, res) {
   try {
-    const [
-      usersResult,
-      activeUsersResult,
-      ordersResult,
-      pendingOrdersResult,
-      servicesResult,
-      coinsResult,
-    ] = await Promise.all([
-      supabase
+    const { count: totalUsers, error: usersError } =
+      await supabase
         .from("profiles")
-        .select("id", { count: "exact", head: true }),
+        .select("id", {
+          count: "exact",
+          head: true,
+        });
 
-      supabase
-        .from("profiles")
-        .select("id", { count: "exact", head: true })
-        .eq("is_active", true),
-
-      supabase
+    const { count: smmOrders, error: ordersError } =
+      await supabase
         .from("smm_orders")
-        .select("id", { count: "exact", head: true }),
+        .select("id", {
+          count: "exact",
+          head: true,
+        });
 
-      supabase
-        .from("smm_orders")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "pending"),
+    const {
+      count: pendingOrders,
+      error: pendingError,
+    } = await supabase
+      .from("smm_orders")
+      .select("id", {
+        count: "exact",
+        head: true,
+      })
+      .eq("status", "pending");
 
-      supabase
-        .from("smm_services")
-        .select("id", { count: "exact", head: true })
-        .eq("active", true),
+    const {
+      data: balances,
+      error: balancesError,
+    } = await supabase
+      .from("profiles")
+      .select("balance");
 
-      supabase
-        .from("profiles")
-        .select("balance"),
-    ]);
-
-    const errors = [
-      usersResult.error,
-      activeUsersResult.error,
-      ordersResult.error,
-      pendingOrdersResult.error,
-      servicesResult.error,
-      coinsResult.error,
-    ].filter(Boolean);
-
-    if (errors.length > 0) {
-      console.error("Dashboard errors:", errors);
-
-      return res.status(500).json({
-        success: false,
-        message: "Could not load dashboard statistics",
-      });
+    if (usersError) {
+      console.error(
+        "Dashboard users error:",
+        usersError
+      );
     }
 
-    const totalCoins = (coinsResult.data || []).reduce(
-      (total, profile) =>
-        total + Number(profile.balance || 0),
-      0
+    if (ordersError) {
+      console.error(
+        "Dashboard orders error:",
+        ordersError
+      );
+    }
+
+    if (pendingError) {
+      console.error(
+        "Dashboard pending orders error:",
+        pendingError
+      );
+    }
+
+    if (balancesError) {
+      console.error(
+        "Dashboard balances error:",
+        balancesError
+      );
+    }
+
+    const coinsInCirculation =
+      (balances || []).reduce(
+        (total, profile) => {
+          return (
+            total +
+            Number(profile.balance || 0)
+          );
+        },
+        0
+      );
+
+    const stats = {
+      totalUsers: totalUsers || 0,
+      coinsInCirculation,
+      smmOrders: smmOrders || 0,
+      pendingOrders: pendingOrders || 0,
+    };
+
+    console.log(
+      "Admin dashboard statistics:",
+      stats
     );
 
-    return res.json({
+    return res.status(200).json({
       success: true,
-      statistics: {
-        totalUsers: usersResult.count || 0,
-        activeUsers: activeUsersResult.count || 0,
-        totalOrders: ordersResult.count || 0,
-        pendingOrders: pendingOrdersResult.count || 0,
-        activeServices: servicesResult.count || 0,
-        coinsInCirculation: totalCoins,
-      },
+      stats,
     });
   } catch (error) {
-    console.error("Admin dashboard error:", error);
+    console.error(
+      "Admin dashboard error:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
-      message: "Could not load dashboard",
+      message:
+        "Could not load dashboard statistics",
     });
   }
 }
-
 /*
 |--------------------------------------------------------------------------
 | Current Administrator
