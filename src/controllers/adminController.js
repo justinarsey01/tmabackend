@@ -1,3 +1,4 @@
+
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 
@@ -7,7 +8,6 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
-
 
 /*
 |--------------------------------------------------------------------------
@@ -98,7 +98,6 @@ export async function getAdminDashboard(req, res) {
   }
 }
 
-
 /*
 |--------------------------------------------------------------------------
 | Current Administrator
@@ -111,7 +110,6 @@ export async function getAdminProfile(req, res) {
     admin: req.admin,
   });
 }
-
 
 /*
 |--------------------------------------------------------------------------
@@ -187,7 +185,6 @@ export async function getAdminUsers(req, res) {
     });
   }
 }
-
 
 /*
 |--------------------------------------------------------------------------
@@ -306,7 +303,6 @@ export async function updateUserStatus(req, res) {
   }
 }
 
-
 /*
 |--------------------------------------------------------------------------
 | Services
@@ -364,7 +360,6 @@ export async function getAdminServices(req, res) {
     });
   }
 }
-
 
 /*
 |--------------------------------------------------------------------------
@@ -506,7 +501,6 @@ export async function createService(req, res) {
     });
   }
 }
-
 
 /*
 |--------------------------------------------------------------------------
@@ -673,7 +667,6 @@ export async function updateService(req, res) {
   }
 }
 
-
 /*
 |--------------------------------------------------------------------------
 | Orders
@@ -682,73 +675,134 @@ export async function updateService(req, res) {
 
 export async function getAdminOrders(req, res) {
   try {
-    const status =
-      typeof req.query.status === "string"
-        ? req.query.status.trim()
-        : "";
-
-    let query = supabase
+    const { data: orders, error } = await supabase
       .from("smm_orders")
-      .select(`
-        id,
-        order_number,
-        user_id,
-        service_id,
-        target,
-        quantity,
-        amount,
-        status,
-        admin_note,
-        processed_by,
-        processed_at,
-        completed_at,
-        refunded_at,
-        refund_amount,
-        created_at,
-        updated_at
-      `)
+      .select("*")
       .order("created_at", {
         ascending: false,
-      })
-      .limit(100);
-
-    if (status) {
-      query = query.eq(
-        "status",
-        status
-      );
-    }
-
-    const {
-      data,
-      error,
-    } = await query;
+      });
 
     if (error) {
       console.error(
-        "Get admin orders error:",
+        "Admin orders lookup error:",
         error
       );
 
       return res.status(500).json({
         success: false,
-        message: "Could not load orders",
+        message: "Could not load SMM orders",
       });
     }
 
     return res.json({
       success: true,
-      orders: data || [],
+      orders: orders || [],
     });
   } catch (error) {
     console.error(
-      "Admin orders error:",
+      "Get admin orders error:",
       error
     );
 
     return res.status(500).json({
       success: false,
-      message: "Could not load orders",
+      message: "Could not load SMM orders",
     });
   }
 }
+
+/*
+|--------------------------------------------------------------------------
+| Update SMM Order Status
+|--------------------------------------------------------------------------
+*/
+
+export async function updateAdminOrderStatus(req, res) {
+  try {
+    const { id } = req.params;
+    const { status, adminNote } = req.body;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Order ID is required",
+      });
+    }
+
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        message: "Order status is required",
+      });
+    }
+
+    const allowedStatuses = [
+      "pending",
+      "processing",
+      "completed",
+      "rejected",
+    ];
+
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid order status",
+      });
+    }
+
+    if (!req.admin?.id) {
+      return res.status(403).json({
+        success: false,
+        message: "Administrator authentication required",
+      });
+    }
+
+    const {
+      data,
+      error,
+    } = await supabase.rpc(
+      "admin_update_smm_order",
+      {
+        p_order_id: id,
+        p_admin_id: req.admin.id,
+        p_status: status,
+        p_admin_note: adminNote || null,
+      }
+    );
+
+    if (error) {
+      console.error(
+        "Admin order status error:",
+        error
+      );
+
+      return res.status(400).json({
+        success: false,
+        message:
+          error.message ||
+          "Could not update order",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message:
+        status === "rejected"
+          ? "Order rejected and refunded successfully"
+          : `Order moved to ${status}`,
+      order: data,
+    });
+  } catch (error) {
+    console.error(
+      "Admin order status controller error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Server error while updating order",
+    });
+  }
+}
+

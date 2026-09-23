@@ -1,3 +1,4 @@
+
 import express from "express";
 
 import { telegramAuth } from "../middleware/telegramAuth.js";
@@ -12,15 +13,14 @@ import {
   createService,
   updateService,
   getAdminOrders,
+  updateAdminOrderStatus,
 } from "../controllers/adminController.js";
 
 const router = express.Router();
 
-
 /*
 |--------------------------------------------------------------------------
-| Every route requires Telegram authentication
-| AND administrator privileges.
+| Admin Authentication
 |--------------------------------------------------------------------------
 */
 
@@ -29,10 +29,9 @@ router.use(
   adminAuth
 );
 
-
 /*
 |--------------------------------------------------------------------------
-| Admin profile
+| Administrator
 |--------------------------------------------------------------------------
 */
 
@@ -41,18 +40,10 @@ router.get(
   getAdminProfile
 );
 
-
-/*
-|--------------------------------------------------------------------------
-| Dashboard
-|--------------------------------------------------------------------------
-*/
-
 router.get(
   "/dashboard",
   getAdminDashboard
 );
-
 
 /*
 |--------------------------------------------------------------------------
@@ -70,10 +61,9 @@ router.patch(
   updateUserStatus
 );
 
-
 /*
 |--------------------------------------------------------------------------
-| Services
+| SMM Services
 |--------------------------------------------------------------------------
 */
 
@@ -92,10 +82,9 @@ router.patch(
   updateService
 );
 
-
 /*
 |--------------------------------------------------------------------------
-| Orders
+| SMM Orders
 |--------------------------------------------------------------------------
 */
 
@@ -104,5 +93,9 @@ router.get(
   getAdminOrders
 );
 
+router.patch(
+  "/orders/:id/status",
+  updateAdminOrderStatus
+);
 
 export default router;
