@@ -29,7 +29,8 @@ export async function getAdminProfile(req, res) {
 
     return res.status(500).json({
       success: false,
-      message: "Could not load administrator profile",
+      message:
+        "Could not load administrator profile",
     });
   }
 }
@@ -232,7 +233,8 @@ export async function updateUserStatus(req, res) {
     if (!id) {
       return res.status(400).json({
         success: false,
-        message: "User ID is required",
+        message:
+          "User ID is required",
       });
     }
 
@@ -312,7 +314,8 @@ export async function updateUserStatus(req, res) {
     } = await supabase
       .from("admin_logs")
       .insert({
-        admin_user_id: req.admin.id,
+        admin_user_id:
+          req.admin.id,
 
         action: isActive
           ? "user_activated"
@@ -472,7 +475,6 @@ export async function createService(req, res) {
         ? active
         : true;
 
-
     /*
     |--------------------------------------------------------------------------
     | VALIDATION
@@ -495,12 +497,11 @@ export async function createService(req, res) {
       });
     }
 
-
     /*
     |--------------------------------------------------------------------------
     | COST PRICE
     |
-    | ZERO IS VALID.
+    | ZERO IS VALID
     |--------------------------------------------------------------------------
     */
 
@@ -515,12 +516,9 @@ export async function createService(req, res) {
       });
     }
 
-
     /*
     |--------------------------------------------------------------------------
     | SELLING PRICE
-    |
-    | Must be greater than zero.
     |--------------------------------------------------------------------------
     */
 
@@ -534,7 +532,6 @@ export async function createService(req, res) {
           "Invalid selling price",
       });
     }
-
 
     /*
     |--------------------------------------------------------------------------
@@ -553,7 +550,6 @@ export async function createService(req, res) {
       });
     }
 
-
     /*
     |--------------------------------------------------------------------------
     | MAXIMUM QUANTITY
@@ -571,7 +567,6 @@ export async function createService(req, res) {
       });
     }
 
-
     /*
     |--------------------------------------------------------------------------
     | CREATE SERVICE
@@ -585,20 +580,13 @@ export async function createService(req, res) {
       .from("smm_services")
       .insert({
         name: serviceName,
-
         category: serviceCategory,
-
         description:
           serviceDescription || null,
-
         cost_price: costPrice,
-
         selling_price: sellingPrice,
-
         min_quantity: minQuantity,
-
         max_quantity: maxQuantity,
-
         active: serviceActive,
       })
       .select(`
@@ -624,16 +612,15 @@ export async function createService(req, res) {
       return res.status(500).json({
         success: false,
         message:
+          error.message ||
           "Could not create SMM service",
       });
     }
 
     return res.status(201).json({
       success: true,
-
       message:
         "SMM service created successfully",
-
       service,
     });
   } catch (error) {
@@ -682,7 +669,6 @@ export async function updateService(req, res) {
 
     const updateData = {};
 
-
     /*
     |--------------------------------------------------------------------------
     | NAME
@@ -706,7 +692,6 @@ export async function updateService(req, res) {
       updateData.name =
         serviceName;
     }
-
 
     /*
     |--------------------------------------------------------------------------
@@ -732,7 +717,6 @@ export async function updateService(req, res) {
         serviceCategory;
     }
 
-
     /*
     |--------------------------------------------------------------------------
     | DESCRIPTION
@@ -746,12 +730,11 @@ export async function updateService(req, res) {
           : null;
     }
 
-
     /*
     |--------------------------------------------------------------------------
     | COST PRICE
     |
-    | ZERO IS VALID.
+    | ZERO IS VALID
     |--------------------------------------------------------------------------
     */
 
@@ -773,7 +756,6 @@ export async function updateService(req, res) {
       updateData.cost_price =
         costPrice;
     }
-
 
     /*
     |--------------------------------------------------------------------------
@@ -800,7 +782,6 @@ export async function updateService(req, res) {
         sellingPrice;
     }
 
-
     /*
     |--------------------------------------------------------------------------
     | MINIMUM QUANTITY
@@ -825,7 +806,6 @@ export async function updateService(req, res) {
       updateData.min_quantity =
         minQuantity;
     }
-
 
     /*
     |--------------------------------------------------------------------------
@@ -852,7 +832,6 @@ export async function updateService(req, res) {
         maxQuantity;
     }
 
-
     /*
     |--------------------------------------------------------------------------
     | ACTIVE STATUS
@@ -874,20 +853,71 @@ export async function updateService(req, res) {
         active;
     }
 
-
     /*
     |--------------------------------------------------------------------------
-    | VALIDATE MIN / MAX TOGETHER
+    | GET EXISTING SERVICE
     |--------------------------------------------------------------------------
     */
 
-    if (
+    const {
+      data: existingService,
+      error: existingError,
+    } = await supabase
+      .from("smm_services")
+      .select(`
+        id,
+        min_quantity,
+        max_quantity
+      `)
+      .eq("id", id)
+      .maybeSingle();
+
+    if (existingError) {
+      console.error(
+        "Existing service lookup error:",
+        existingError
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Could not verify existing service",
+      });
+    }
+
+    if (!existingService) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Service not found",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | FINAL QUANTITY VALIDATION
+    |--------------------------------------------------------------------------
+    */
+
+    const finalMinQuantity =
       updateData.min_quantity !==
-        undefined &&
+      undefined
+        ? updateData.min_quantity
+        : Number(
+            existingService.min_quantity
+          );
+
+    const finalMaxQuantity =
       updateData.max_quantity !==
-        undefined &&
-      updateData.max_quantity <
-        updateData.min_quantity
+      undefined
+        ? updateData.max_quantity
+        : Number(
+            existingService.max_quantity
+          );
+
+    if (
+      finalMaxQuantity <
+      finalMinQuantity
     ) {
       return res.status(400).json({
         success: false,
@@ -895,120 +925,6 @@ export async function updateService(req, res) {
           "Maximum quantity must be greater than or equal to minimum quantity",
       });
     }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | IF ONLY ONE QUANTITY WAS UPDATED,
-    | CHECK AGAINST EXISTING SERVICE
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-      updateData.min_quantity !==
-        undefined &&
-      updateData.max_quantity ===
-        undefined
-    ) {
-      const {
-        data: existingService,
-        error: existingError,
-      } = await supabase
-        .from("smm_services")
-        .select("max_quantity")
-        .eq("id", id)
-        .maybeSingle();
-
-      if (existingError) {
-        console.error(
-          "Existing service lookup error:",
-          existingError
-        );
-
-        return res.status(500).json({
-          success: false,
-          message:
-            "Could not validate service quantities",
-        });
-      }
-
-      if (
-        !existingService
-      ) {
-        return res.status(404).json({
-          success: false,
-          message:
-            "Service not found",
-        });
-      }
-
-      if (
-        Number(
-          existingService.max_quantity
-        ) <
-        updateData.min_quantity
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Minimum quantity cannot be greater than maximum quantity",
-        });
-      }
-    }
-
-
-    if (
-      updateData.max_quantity !==
-        undefined &&
-      updateData.min_quantity ===
-        undefined
-    ) {
-      const {
-        data: existingService,
-        error: existingError,
-      } = await supabase
-        .from("smm_services")
-        .select("min_quantity")
-        .eq("id", id)
-        .maybeSingle();
-
-      if (existingError) {
-        console.error(
-          "Existing service lookup error:",
-          existingError
-        );
-
-        return res.status(500).json({
-          success: false,
-          message:
-            "Could not validate service quantities",
-        });
-      }
-
-      if (
-        !existingService
-      ) {
-        return res.status(404).json({
-          success: false,
-          message:
-            "Service not found",
-        });
-      }
-
-      if (
-        updateData.max_quantity <
-        Number(
-          existingService.min_quantity
-        )
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Maximum quantity cannot be less than minimum quantity",
-        });
-      }
-    }
-
 
     /*
     |--------------------------------------------------------------------------
@@ -1028,15 +944,14 @@ export async function updateService(req, res) {
       });
     }
 
-
     /*
     |--------------------------------------------------------------------------
     | UPDATE SERVICE
+    |
+    | IMPORTANT:
+    | We intentionally do NOT use updated_at here.
     |--------------------------------------------------------------------------
     */
-
-    updateData.updated_at =
-      new Date().toISOString();
 
     const {
       data: service,
@@ -1055,8 +970,7 @@ export async function updateService(req, res) {
         min_quantity,
         max_quantity,
         active,
-        created_at,
-        updated_at
+        created_at
       `)
       .single();
 
@@ -1069,16 +983,15 @@ export async function updateService(req, res) {
       return res.status(500).json({
         success: false,
         message:
+          error.message ||
           "Could not update SMM service",
       });
     }
 
     return res.json({
       success: true,
-
       message:
         "SMM service updated successfully",
-
       service,
     });
   } catch (error) {
@@ -1098,7 +1011,7 @@ export async function updateService(req, res) {
 
 /*
 |--------------------------------------------------------------------------
-| ADMIN ORDERS
+| GET ADMIN ORDERS
 |--------------------------------------------------------------------------
 */
 
