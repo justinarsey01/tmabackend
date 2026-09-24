@@ -140,12 +140,7 @@ export async function getAdminProfile(req, res) {
 
 export async function getAdminUsers(req, res) {
   try {
-    const search =
-      typeof req.query.search === "string"
-        ? req.query.search.trim()
-        : "";
-
-    let query = supabase
+    const { data: users, error } = await supabase
       .from("profiles")
       .select(`
         id,
@@ -153,56 +148,47 @@ export async function getAdminUsers(req, res) {
         username,
         first_name,
         last_name,
+        photo_url,
         balance,
         total_earned,
         total_spent,
-        referral_code,
         is_active,
         is_admin,
         banned_at,
         banned_reason,
-        created_at
+        created_at,
+        updated_at
       `)
       .order("created_at", {
         ascending: false,
-      })
-      .limit(100);
-
-    if (search) {
-      const escapedSearch = search.replace(
-        /[%_]/g,
-        "\\$&"
-      );
-
-      query = query.or(
-        `telegram_id.ilike.%${escapedSearch}%,username.ilike.%${escapedSearch}%,first_name.ilike.%${escapedSearch}%,last_name.ilike.%${escapedSearch}%`
-      );
-    }
-
-    const {
-      data,
-      error,
-    } = await query;
+      });
 
     if (error) {
-      console.error("Get admin users error:", error);
+      console.error(
+        "Admin users lookup error:",
+        error
+      );
 
       return res.status(500).json({
         success: false,
-        message: "Could not load users",
+        message: "Could not load registered users",
       });
     }
 
-    return res.json({
+    return res.status(200).json({
       success: true,
-      users: data || [],
+      users: users || [],
+      total: users?.length || 0,
     });
   } catch (error) {
-    console.error("Admin users error:", error);
+    console.error(
+      "Get admin users error:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
-      message: "Could not load users",
+      message: "Server error while loading users",
     });
   }
 }
