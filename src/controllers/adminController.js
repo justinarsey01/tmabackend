@@ -1,4 +1,3 @@
-
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 
@@ -9,29 +8,60 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+
 /*
 |--------------------------------------------------------------------------
-| Dashboard
+| ADMIN PROFILE
+|--------------------------------------------------------------------------
+*/
+
+export async function getAdminProfile(req, res) {
+  try {
+    return res.json({
+      success: true,
+      admin: req.admin,
+    });
+  } catch (error) {
+    console.error(
+      "Get admin profile error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Could not load administrator profile",
+    });
+  }
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| ADMIN DASHBOARD
 |--------------------------------------------------------------------------
 */
 
 export async function getAdminDashboard(req, res) {
   try {
-    const { count: totalUsers, error: usersError } =
-      await supabase
-        .from("profiles")
-        .select("id", {
-          count: "exact",
-          head: true,
-        });
+    const {
+      count: totalUsers,
+      error: usersError,
+    } = await supabase
+      .from("profiles")
+      .select("id", {
+        count: "exact",
+        head: true,
+      });
 
-    const { count: smmOrders, error: ordersError } =
-      await supabase
-        .from("smm_orders")
-        .select("id", {
-          count: "exact",
-          head: true,
-        });
+    const {
+      count: smmOrders,
+      error: ordersError,
+    } = await supabase
+      .from("smm_orders")
+      .select("id", {
+        count: "exact",
+        head: true,
+      });
 
     const {
       count: pendingOrders,
@@ -81,12 +111,8 @@ export async function getAdminDashboard(req, res) {
 
     const coinsInCirculation =
       (balances || []).reduce(
-        (total, profile) => {
-          return (
-            total +
-            Number(profile.balance || 0)
-          );
-        },
+        (total, profile) =>
+          total + Number(profile.balance || 0),
         0
       );
 
@@ -119,28 +145,20 @@ export async function getAdminDashboard(req, res) {
     });
   }
 }
-/*
-|--------------------------------------------------------------------------
-| Current Administrator
-|--------------------------------------------------------------------------
-*/
 
-export async function getAdminProfile(req, res) {
-  return res.json({
-    success: true,
-    admin: req.admin,
-  });
-}
 
 /*
 |--------------------------------------------------------------------------
-| Users
+| ADMIN USERS
 |--------------------------------------------------------------------------
 */
 
 export async function getAdminUsers(req, res) {
   try {
-    const { data: users, error } = await supabase
+    const {
+      data: users,
+      error,
+    } = await supabase
       .from("profiles")
       .select(`
         id,
@@ -171,7 +189,8 @@ export async function getAdminUsers(req, res) {
 
       return res.status(500).json({
         success: false,
-        message: "Could not load registered users",
+        message:
+          "Could not load registered users",
       });
     }
 
@@ -188,20 +207,27 @@ export async function getAdminUsers(req, res) {
 
     return res.status(500).json({
       success: false,
-      message: "Server error while loading users",
+      message:
+        "Server error while loading users",
     });
   }
 }
 
+
 /*
 |--------------------------------------------------------------------------
-| Activate / Deactivate User
+| ACTIVATE / DEACTIVATE USER
 |--------------------------------------------------------------------------
 */
+
 export async function updateUserStatus(req, res) {
   try {
     const { id } = req.params;
-    const { isActive, reason } = req.body;
+
+    const {
+      isActive,
+      reason,
+    } = req.body;
 
     if (!id) {
       return res.status(400).json({
@@ -213,34 +239,41 @@ export async function updateUserStatus(req, res) {
     if (typeof isActive !== "boolean") {
       return res.status(400).json({
         success: false,
-        message: "isActive must be true or false",
+        message:
+          "isActive must be true or false",
       });
     }
 
-    // Prevent an administrator from accidentally
-    // deactivating their own account.
     if (req.admin?.id === id) {
       return res.status(400).json({
         success: false,
-        message: "You cannot deactivate your own administrator account",
+        message:
+          "You cannot deactivate your own administrator account",
       });
     }
 
     const updateData = {
       is_active: isActive,
-      updated_at: new Date().toISOString(),
+      updated_at:
+        new Date().toISOString(),
     };
 
     if (isActive) {
       updateData.banned_at = null;
       updateData.banned_reason = null;
     } else {
-      updateData.banned_at = new Date().toISOString();
+      updateData.banned_at =
+        new Date().toISOString();
+
       updateData.banned_reason =
-        reason?.trim() || "Deactivated by administrator";
+        reason?.trim() ||
+        "Deactivated by administrator";
     }
 
-    const { data: user, error } = await supabase
+    const {
+      data: user,
+      error,
+    } = await supabase
       .from("profiles")
       .update(updateData)
       .eq("id", id)
@@ -269,19 +302,24 @@ export async function updateUserStatus(req, res) {
 
       return res.status(500).json({
         success: false,
-        message: "Could not update user status",
+        message:
+          "Could not update user status",
       });
     }
 
-    // Record the administrator action.
-    const { error: logError } = await supabase
+    const {
+      error: logError,
+    } = await supabase
       .from("admin_logs")
       .insert({
         admin_user_id: req.admin.id,
+
         action: isActive
           ? "user_activated"
           : "user_deactivated",
+
         target_user_id: id,
+
         details: {
           reason:
             reason?.trim() ||
@@ -300,9 +338,11 @@ export async function updateUserStatus(req, res) {
 
     return res.json({
       success: true,
+
       message: isActive
         ? "User activated successfully"
         : "User deactivated successfully",
+
       user,
     });
   } catch (error) {
@@ -313,21 +353,23 @@ export async function updateUserStatus(req, res) {
 
     return res.status(500).json({
       success: false,
-      message: "Server error while updating user status",
+      message:
+        "Server error while updating user status",
     });
   }
 }
 
+
 /*
 |--------------------------------------------------------------------------
-| Services
+| GET ADMIN SMM SERVICES
 |--------------------------------------------------------------------------
 */
 
 export async function getAdminServices(req, res) {
   try {
     const {
-      data,
+      data: services,
       error,
     } = await supabase
       .from("smm_services")
@@ -344,41 +386,44 @@ export async function getAdminServices(req, res) {
         created_at
       `)
       .order("created_at", {
-        ascending: false,
+        ascending: true,
       });
 
     if (error) {
       console.error(
-        "Get admin services error:",
+        "Admin services lookup error:",
         error
       );
 
       return res.status(500).json({
         success: false,
-        message: "Could not load services",
+        message:
+          "Could not load SMM services",
       });
     }
 
     return res.json({
       success: true,
-      services: data || [],
+      services: services || [],
     });
   } catch (error) {
     console.error(
-      "Admin services error:",
+      "Get admin services error:",
       error
     );
 
     return res.status(500).json({
       success: false,
-      message: "Could not load services",
+      message:
+        "Could not load SMM services",
     });
   }
 }
 
+
 /*
 |--------------------------------------------------------------------------
-| Create Service
+| CREATE SMM SERVICE
 |--------------------------------------------------------------------------
 */
 
@@ -388,67 +433,150 @@ export async function createService(req, res) {
       name,
       category,
       description,
-      costPrice,
-      sellingPrice,
-      minQuantity,
-      maxQuantity,
+      cost_price,
+      selling_price,
+      min_quantity,
+      max_quantity,
       active,
     } = req.body;
 
-    if (
-      typeof name !== "string" ||
-      !name.trim()
-    ) {
+    const serviceName =
+      typeof name === "string"
+        ? name.trim()
+        : "";
+
+    const serviceCategory =
+      typeof category === "string"
+        ? category.trim()
+        : "";
+
+    const serviceDescription =
+      typeof description === "string"
+        ? description.trim()
+        : "";
+
+    const costPrice =
+      Number(cost_price);
+
+    const sellingPrice =
+      Number(selling_price);
+
+    const minQuantity =
+      Number(min_quantity);
+
+    const maxQuantity =
+      Number(max_quantity);
+
+    const serviceActive =
+      typeof active === "boolean"
+        ? active
+        : true;
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | VALIDATION
+    |--------------------------------------------------------------------------
+    */
+
+    if (!serviceName) {
       return res.status(400).json({
         success: false,
-        message: "Service name is required",
+        message:
+          "Service name is required",
       });
     }
 
-    const parsedCost = Number(costPrice);
-    const parsedSelling = Number(sellingPrice);
-    const parsedMin = Number(minQuantity);
-    const parsedMax = Number(maxQuantity);
-
-    if (
-      !Number.isFinite(parsedCost) ||
-      parsedCost < 0
-    ) {
+    if (!serviceCategory) {
       return res.status(400).json({
         success: false,
-        message: "Invalid cost price",
+        message:
+          "Service category is required",
       });
     }
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | COST PRICE
+    |
+    | ZERO IS VALID.
+    |--------------------------------------------------------------------------
+    */
+
     if (
-      !Number.isFinite(parsedSelling) ||
-      parsedSelling < 0
+      !Number.isFinite(costPrice) ||
+      costPrice < 0
     ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid selling price",
+        message:
+          "Invalid cost price",
       });
     }
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | SELLING PRICE
+    |
+    | Must be greater than zero.
+    |--------------------------------------------------------------------------
+    */
+
     if (
-      !Number.isInteger(parsedMin) ||
-      parsedMin <= 0
+      !Number.isFinite(sellingPrice) ||
+      sellingPrice <= 0
     ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid minimum quantity",
+        message:
+          "Invalid selling price",
       });
     }
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | MINIMUM QUANTITY
+    |--------------------------------------------------------------------------
+    */
+
     if (
-      !Number.isInteger(parsedMax) ||
-      parsedMax < parsedMin
+      !Number.isInteger(minQuantity) ||
+      minQuantity < 1
     ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid maximum quantity",
+        message:
+          "Invalid minimum quantity",
       });
     }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | MAXIMUM QUANTITY
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      !Number.isInteger(maxQuantity) ||
+      maxQuantity < minQuantity
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid maximum quantity",
+      });
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | CREATE SERVICE
+    |--------------------------------------------------------------------------
+    */
 
     const {
       data: service,
@@ -456,52 +584,56 @@ export async function createService(req, res) {
     } = await supabase
       .from("smm_services")
       .insert({
-        name: name.trim(),
-        category:
-          typeof category === "string"
-            ? category.trim()
-            : "telegram",
+        name: serviceName,
+
+        category: serviceCategory,
+
         description:
-          typeof description === "string"
-            ? description.trim()
-            : null,
-        cost_price: parsedCost,
-        selling_price: parsedSelling,
-        min_quantity: parsedMin,
-        max_quantity: parsedMax,
-        active:
-          typeof active === "boolean"
-            ? active
-            : true,
+          serviceDescription || null,
+
+        cost_price: costPrice,
+
+        selling_price: sellingPrice,
+
+        min_quantity: minQuantity,
+
+        max_quantity: maxQuantity,
+
+        active: serviceActive,
       })
-      .select()
+      .select(`
+        id,
+        name,
+        category,
+        description,
+        cost_price,
+        selling_price,
+        min_quantity,
+        max_quantity,
+        active,
+        created_at
+      `)
       .single();
 
     if (error) {
       console.error(
-        "Create service error:",
+        "Create service database error:",
         error
       );
 
       return res.status(500).json({
         success: false,
-        message: "Could not create service",
+        message:
+          "Could not create SMM service",
       });
     }
 
-    await supabase
-      .from("admin_logs")
-      .insert({
-        admin_user_id: req.admin.id,
-        action: "create_service",
-        details: {
-          service_id: service.id,
-          name: service.name,
-        },
-      });
-
     return res.status(201).json({
       success: true,
+
+      message:
+        "SMM service created successfully",
+
       service,
     });
   } catch (error) {
@@ -512,14 +644,16 @@ export async function createService(req, res) {
 
     return res.status(500).json({
       success: false,
-      message: "Could not create service",
+      message:
+        "Server error while creating service",
     });
   }
 }
 
+
 /*
 |--------------------------------------------------------------------------
-| Update Service
+| UPDATE SMM SERVICE
 |--------------------------------------------------------------------------
 */
 
@@ -527,110 +661,382 @@ export async function updateService(req, res) {
   try {
     const { id } = req.params;
 
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Service ID is required",
+      });
+    }
+
     const {
       name,
       category,
       description,
-      costPrice,
-      sellingPrice,
-      minQuantity,
-      maxQuantity,
+      cost_price,
+      selling_price,
+      min_quantity,
+      max_quantity,
       active,
     } = req.body;
 
-    if (!id) {
-      return res.status(400).json({
-        success: false,
-        message: "Service ID is required",
-      });
-    }
-
     const updateData = {};
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | NAME
+    |--------------------------------------------------------------------------
+    */
+
     if (name !== undefined) {
-      if (
-        typeof name !== "string" ||
-        !name.trim()
-      ) {
+      const serviceName =
+        typeof name === "string"
+          ? name.trim()
+          : "";
+
+      if (!serviceName) {
         return res.status(400).json({
           success: false,
-          message: "Invalid service name",
+          message:
+            "Service name cannot be empty",
         });
       }
 
-      updateData.name = name.trim();
+      updateData.name =
+        serviceName;
     }
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | CATEGORY
+    |--------------------------------------------------------------------------
+    */
+
     if (category !== undefined) {
-      updateData.category = category;
+      const serviceCategory =
+        typeof category === "string"
+          ? category.trim()
+          : "";
+
+      if (!serviceCategory) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Service category cannot be empty",
+        });
+      }
+
+      updateData.category =
+        serviceCategory;
     }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | DESCRIPTION
+    |--------------------------------------------------------------------------
+    */
 
     if (description !== undefined) {
       updateData.description =
-        description || null;
+        typeof description === "string"
+          ? description.trim() || null
+          : null;
     }
 
-    if (costPrice !== undefined) {
-      const value = Number(costPrice);
 
-      if (!Number.isFinite(value) || value < 0) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid cost price",
-        });
-      }
+    /*
+    |--------------------------------------------------------------------------
+    | COST PRICE
+    |
+    | ZERO IS VALID.
+    |--------------------------------------------------------------------------
+    */
 
-      updateData.cost_price = value;
-    }
-
-    if (sellingPrice !== undefined) {
-      const value = Number(sellingPrice);
-
-      if (!Number.isFinite(value) || value < 0) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid selling price",
-        });
-      }
-
-      updateData.selling_price = value;
-    }
-
-    if (minQuantity !== undefined) {
-      const value = Number(minQuantity);
+    if (cost_price !== undefined) {
+      const costPrice =
+        Number(cost_price);
 
       if (
-        !Number.isInteger(value) ||
-        value <= 0
+        !Number.isFinite(costPrice) ||
+        costPrice < 0
       ) {
         return res.status(400).json({
           success: false,
-          message: "Invalid minimum quantity",
+          message:
+            "Invalid cost price",
         });
       }
 
-      updateData.min_quantity = value;
+      updateData.cost_price =
+        costPrice;
     }
 
-    if (maxQuantity !== undefined) {
-      const value = Number(maxQuantity);
+
+    /*
+    |--------------------------------------------------------------------------
+    | SELLING PRICE
+    |--------------------------------------------------------------------------
+    */
+
+    if (selling_price !== undefined) {
+      const sellingPrice =
+        Number(selling_price);
 
       if (
-        !Number.isInteger(value) ||
-        value <= 0
+        !Number.isFinite(sellingPrice) ||
+        sellingPrice <= 0
       ) {
         return res.status(400).json({
           success: false,
-          message: "Invalid maximum quantity",
+          message:
+            "Invalid selling price",
         });
       }
 
-      updateData.max_quantity = value;
+      updateData.selling_price =
+        sellingPrice;
     }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | MINIMUM QUANTITY
+    |--------------------------------------------------------------------------
+    */
+
+    if (min_quantity !== undefined) {
+      const minQuantity =
+        Number(min_quantity);
+
+      if (
+        !Number.isInteger(minQuantity) ||
+        minQuantity < 1
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid minimum quantity",
+        });
+      }
+
+      updateData.min_quantity =
+        minQuantity;
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | MAXIMUM QUANTITY
+    |--------------------------------------------------------------------------
+    */
+
+    if (max_quantity !== undefined) {
+      const maxQuantity =
+        Number(max_quantity);
+
+      if (
+        !Number.isInteger(maxQuantity) ||
+        maxQuantity < 1
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid maximum quantity",
+        });
+      }
+
+      updateData.max_quantity =
+        maxQuantity;
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | ACTIVE STATUS
+    |--------------------------------------------------------------------------
+    */
 
     if (active !== undefined) {
-      updateData.active = Boolean(active);
+      if (
+        typeof active !== "boolean"
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Active must be true or false",
+        });
+      }
+
+      updateData.active =
+        active;
     }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | VALIDATE MIN / MAX TOGETHER
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      updateData.min_quantity !==
+        undefined &&
+      updateData.max_quantity !==
+        undefined &&
+      updateData.max_quantity <
+        updateData.min_quantity
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Maximum quantity must be greater than or equal to minimum quantity",
+      });
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | IF ONLY ONE QUANTITY WAS UPDATED,
+    | CHECK AGAINST EXISTING SERVICE
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      updateData.min_quantity !==
+        undefined &&
+      updateData.max_quantity ===
+        undefined
+    ) {
+      const {
+        data: existingService,
+        error: existingError,
+      } = await supabase
+        .from("smm_services")
+        .select("max_quantity")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (existingError) {
+        console.error(
+          "Existing service lookup error:",
+          existingError
+        );
+
+        return res.status(500).json({
+          success: false,
+          message:
+            "Could not validate service quantities",
+        });
+      }
+
+      if (
+        !existingService
+      ) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Service not found",
+        });
+      }
+
+      if (
+        Number(
+          existingService.max_quantity
+        ) <
+        updateData.min_quantity
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Minimum quantity cannot be greater than maximum quantity",
+        });
+      }
+    }
+
+
+    if (
+      updateData.max_quantity !==
+        undefined &&
+      updateData.min_quantity ===
+        undefined
+    ) {
+      const {
+        data: existingService,
+        error: existingError,
+      } = await supabase
+        .from("smm_services")
+        .select("min_quantity")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (existingError) {
+        console.error(
+          "Existing service lookup error:",
+          existingError
+        );
+
+        return res.status(500).json({
+          success: false,
+          message:
+            "Could not validate service quantities",
+        });
+      }
+
+      if (
+        !existingService
+      ) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Service not found",
+        });
+      }
+
+      if (
+        updateData.max_quantity <
+        Number(
+          existingService.min_quantity
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Maximum quantity cannot be less than minimum quantity",
+        });
+      }
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | MAKE SURE SOMETHING IS BEING UPDATED
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      Object.keys(
+        updateData
+      ).length === 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "No service changes provided",
+      });
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | UPDATE SERVICE
+    |--------------------------------------------------------------------------
+    */
+
+    updateData.updated_at =
+      new Date().toISOString();
 
     const {
       data: service,
@@ -639,34 +1045,40 @@ export async function updateService(req, res) {
       .from("smm_services")
       .update(updateData)
       .eq("id", id)
-      .select()
+      .select(`
+        id,
+        name,
+        category,
+        description,
+        cost_price,
+        selling_price,
+        min_quantity,
+        max_quantity,
+        active,
+        created_at,
+        updated_at
+      `)
       .single();
 
     if (error) {
       console.error(
-        "Update service error:",
+        "Update service database error:",
         error
       );
 
       return res.status(500).json({
         success: false,
-        message: "Could not update service",
+        message:
+          "Could not update SMM service",
       });
     }
 
-    await supabase
-      .from("admin_logs")
-      .insert({
-        admin_user_id: req.admin.id,
-        action: "update_service",
-        details: {
-          service_id: id,
-          changes: updateData,
-        },
-      });
-
     return res.json({
       success: true,
+
+      message:
+        "SMM service updated successfully",
+
       service,
     });
   } catch (error) {
@@ -677,20 +1089,25 @@ export async function updateService(req, res) {
 
     return res.status(500).json({
       success: false,
-      message: "Could not update service",
+      message:
+        "Server error while updating service",
     });
   }
 }
 
+
 /*
 |--------------------------------------------------------------------------
-| Orders
+| ADMIN ORDERS
 |--------------------------------------------------------------------------
 */
 
 export async function getAdminOrders(req, res) {
   try {
-    const { data: orders, error } = await supabase
+    const {
+      data: orders,
+      error,
+    } = await supabase
       .from("smm_orders")
       .select("*")
       .order("created_at", {
@@ -705,7 +1122,8 @@ export async function getAdminOrders(req, res) {
 
       return res.status(500).json({
         success: false,
-        message: "Could not load SMM orders",
+        message:
+          "Could not load SMM orders",
       });
     }
 
@@ -721,33 +1139,44 @@ export async function getAdminOrders(req, res) {
 
     return res.status(500).json({
       success: false,
-      message: "Could not load SMM orders",
+      message:
+        "Could not load SMM orders",
     });
   }
 }
 
+
 /*
 |--------------------------------------------------------------------------
-| Update SMM Order Status
+| UPDATE ADMIN ORDER STATUS
 |--------------------------------------------------------------------------
 */
 
-export async function updateAdminOrderStatus(req, res) {
+export async function updateAdminOrderStatus(
+  req,
+  res
+) {
   try {
     const { id } = req.params;
-    const { status, adminNote } = req.body;
+
+    const {
+      status,
+      adminNote,
+    } = req.body;
 
     if (!id) {
       return res.status(400).json({
         success: false,
-        message: "Order ID is required",
+        message:
+          "Order ID is required",
       });
     }
 
     if (!status) {
       return res.status(400).json({
         success: false,
-        message: "Order status is required",
+        message:
+          "Order status is required",
       });
     }
 
@@ -758,17 +1187,23 @@ export async function updateAdminOrderStatus(req, res) {
       "rejected",
     ];
 
-    if (!allowedStatuses.includes(status)) {
+    if (
+      !allowedStatuses.includes(
+        status
+      )
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid order status",
+        message:
+          "Invalid order status",
       });
     }
 
     if (!req.admin?.id) {
       return res.status(403).json({
         success: false,
-        message: "Administrator authentication required",
+        message:
+          "Administrator authentication required",
       });
     }
 
@@ -779,9 +1214,15 @@ export async function updateAdminOrderStatus(req, res) {
       "admin_update_smm_order",
       {
         p_order_id: id,
-        p_admin_id: req.admin.id,
-        p_status: status,
-        p_admin_note: adminNote || null,
+
+        p_admin_id:
+          req.admin.id,
+
+        p_status:
+          status,
+
+        p_admin_note:
+          adminNote || null,
       }
     );
 
@@ -801,10 +1242,12 @@ export async function updateAdminOrderStatus(req, res) {
 
     return res.json({
       success: true,
+
       message:
         status === "rejected"
           ? "Order rejected and refunded successfully"
           : `Order moved to ${status}`,
+
       order: data,
     });
   } catch (error) {
@@ -820,4 +1263,3 @@ export async function updateAdminOrderStatus(req, res) {
     });
   }
 }
-
