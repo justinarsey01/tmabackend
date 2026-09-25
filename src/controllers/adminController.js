@@ -42,8 +42,13 @@ export async function getAdminProfile(req, res) {
 |--------------------------------------------------------------------------
 */
 
+
 export async function getAdminDashboard(req, res) {
   try {
+    // --------------------------------------------------
+    // USERS
+    // --------------------------------------------------
+
     const {
       count: totalUsers,
       error: usersError,
@@ -53,6 +58,32 @@ export async function getAdminDashboard(req, res) {
         count: "exact",
         head: true,
       });
+
+    const {
+      count: activeUsers,
+      error: activeUsersError,
+    } = await supabase
+      .from("profiles")
+      .select("id", {
+        count: "exact",
+        head: true,
+      })
+      .eq("is_active", true);
+
+    // --------------------------------------------------
+    // BALANCES
+    // --------------------------------------------------
+
+    const {
+      data: balances,
+      error: balancesError,
+    } = await supabase
+      .from("profiles")
+      .select("balance");
+
+    // --------------------------------------------------
+    // SMM ORDERS
+    // --------------------------------------------------
 
     const {
       count: smmOrders,
@@ -76,16 +107,137 @@ export async function getAdminDashboard(req, res) {
       .eq("status", "pending");
 
     const {
-      data: balances,
-      error: balancesError,
+      count: processingOrders,
+      error: processingError,
     } = await supabase
-      .from("profiles")
-      .select("balance");
+      .from("smm_orders")
+      .select("id", {
+        count: "exact",
+        head: true,
+      })
+      .eq("status", "processing");
+
+    const {
+      count: completedOrders,
+      error: completedError,
+    } = await supabase
+      .from("smm_orders")
+      .select("id", {
+        count: "exact",
+        head: true,
+      })
+      .eq("status", "completed");
+
+    const {
+      count: rejectedOrders,
+      error: rejectedError,
+    } = await supabase
+      .from("smm_orders")
+      .select("id", {
+        count: "exact",
+        head: true,
+      })
+      .eq("status", "rejected");
+
+    // --------------------------------------------------
+    // SERVICES
+    // --------------------------------------------------
+
+    const {
+      count: activeServices,
+      error: servicesError,
+    } = await supabase
+      .from("smm_services")
+      .select("id", {
+        count: "exact",
+        head: true,
+      })
+      .eq("active", true);
+
+    // --------------------------------------------------
+    // TASKS
+    // --------------------------------------------------
+
+    const {
+      count: activeTasks,
+      error: tasksError,
+    } = await supabase
+      .from("tasks")
+      .select("id", {
+        count: "exact",
+        head: true,
+      })
+      .eq("active", true);
+
+    // --------------------------------------------------
+    // COINS IN CIRCULATION
+    // --------------------------------------------------
+
+    const coinsInCirculation =
+      (balances || []).reduce(
+        (total, profile) =>
+          total + Number(profile.balance || 0),
+        0
+      );
+
+    // --------------------------------------------------
+    // RECENT ORDERS
+    // --------------------------------------------------
+
+    const {
+      data: recentOrders,
+      error: recentOrdersError,
+    } = await supabase
+      .from("smm_orders")
+      .select(`
+        id,
+        order_number,
+        user_id,
+        service_id,
+        target,
+        quantity,
+        amount,
+        status,
+        admin_note,
+        created_at,
+        updated_at,
+        profiles:user_id (
+          username,
+          first_name,
+          last_name
+        ),
+        smm_services:service_id (
+          name,
+          category
+        )
+      `)
+      .order("created_at", {
+        ascending: false,
+      })
+      .limit(10);
+
+    // --------------------------------------------------
+    // ERROR LOGGING
+    // --------------------------------------------------
 
     if (usersError) {
       console.error(
         "Dashboard users error:",
         usersError
+      );
+    }
+
+    if (activeUsersError) {
+      console.error(
+        "Dashboard active users error:",
+        activeUsersError
+      );
+    }
+
+    if (balancesError) {
+      console.error(
+        "Dashboard balances error:",
+        balancesError
       );
     }
 
@@ -103,25 +255,69 @@ export async function getAdminDashboard(req, res) {
       );
     }
 
-    if (balancesError) {
+    if (processingError) {
       console.error(
-        "Dashboard balances error:",
-        balancesError
+        "Dashboard processing orders error:",
+        processingError
       );
     }
 
-    const coinsInCirculation =
-      (balances || []).reduce(
-        (total, profile) =>
-          total + Number(profile.balance || 0),
-        0
+    if (completedError) {
+      console.error(
+        "Dashboard completed orders error:",
+        completedError
       );
+    }
+
+    if (rejectedError) {
+      console.error(
+        "Dashboard rejected orders error:",
+        rejectedError
+      );
+    }
+
+    if (servicesError) {
+      console.error(
+        "Dashboard services error:",
+        servicesError
+      );
+    }
+
+    if (tasksError) {
+      console.error(
+        "Dashboard tasks error:",
+        tasksError
+      );
+    }
+
+    if (recentOrdersError) {
+      console.error(
+        "Dashboard recent orders error:",
+        recentOrdersError
+      );
+    }
+
+    // --------------------------------------------------
+    // DASHBOARD RESPONSE
+    // --------------------------------------------------
 
     const stats = {
       totalUsers: totalUsers || 0,
+      activeUsers: activeUsers || 0,
+
       coinsInCirculation,
+
       smmOrders: smmOrders || 0,
       pendingOrders: pendingOrders || 0,
+      processingOrders: processingOrders || 0,
+      completedOrders: completedOrders || 0,
+      rejectedOrders: rejectedOrders || 0,
+
+      activeServices: activeServices || 0,
+      activeTasks: activeTasks || 0,
+
+      // Kept for dashboard compatibility.
+      coinsDistributed: coinsInCirculation,
     };
 
     console.log(
@@ -131,7 +327,10 @@ export async function getAdminDashboard(req, res) {
 
     return res.status(200).json({
       success: true,
+
       stats,
+
+      recentOrders: recentOrders || [],
     });
   } catch (error) {
     console.error(
@@ -146,6 +345,7 @@ export async function getAdminDashboard(req, res) {
     });
   }
 }
+
 
 
 /*
