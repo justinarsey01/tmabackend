@@ -1176,3 +1176,540 @@ export async function updateAdminOrderStatus(
     });
   }
 }
+/*
+|--------------------------------------------------------------------------
+| GET ADMIN TASKS
+|--------------------------------------------------------------------------
+*/
+
+export async function getAdminTasks(req, res) {
+  try {
+    const {
+      data: tasks,
+      error,
+    } = await supabase
+      .from("tasks")
+      .select(`
+        id,
+        title,
+        description,
+        type,
+        target,
+        reward,
+        active,
+        created_at,
+        updated_at
+      `)
+      .order("created_at", {
+        ascending: false,
+      });
+
+    if (error) {
+      console.error(
+        "Admin tasks lookup error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Could not load tasks",
+      });
+    }
+
+    return res.json({
+      success: true,
+      tasks: tasks || [],
+    });
+  } catch (error) {
+    console.error(
+      "Get admin tasks error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Could not load tasks",
+    });
+  }
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| CREATE TASK
+|--------------------------------------------------------------------------
+*/
+
+export async function createTask(req, res) {
+  try {
+    const {
+      title,
+      description,
+      type,
+      target,
+      reward,
+      active,
+    } = req.body;
+
+    const taskTitle =
+      typeof title === "string"
+        ? title.trim()
+        : "";
+
+    const taskDescription =
+      typeof description === "string"
+        ? description.trim()
+        : "";
+
+    const taskType =
+      typeof type === "string"
+        ? type.trim()
+        : "";
+
+    const taskTarget =
+      typeof target === "string"
+        ? target.trim()
+        : "";
+
+    const taskReward =
+      Number(reward);
+
+    const taskActive =
+      typeof active === "boolean"
+        ? active
+        : true;
+
+    if (!taskTitle) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Task title is required",
+      });
+    }
+
+    if (!taskType) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Task type is required",
+      });
+    }
+
+    if (!taskTarget) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Task target is required",
+      });
+    }
+
+    if (
+      !Number.isFinite(taskReward) ||
+      taskReward <= 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Task reward must be greater than 0",
+      });
+    }
+
+    const {
+      data: task,
+      error,
+    } = await supabase
+      .from("tasks")
+      .insert({
+        title: taskTitle,
+
+        description:
+          taskDescription || null,
+
+        type: taskType,
+
+        target: taskTarget,
+
+        reward: taskReward,
+
+        active: taskActive,
+      })
+      .select(`
+        id,
+        title,
+        description,
+        type,
+        target,
+        reward,
+        active,
+        created_at,
+        updated_at
+      `)
+      .single();
+
+    if (error) {
+      console.error(
+        "Create task database error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          error.message ||
+          "Could not create task",
+      });
+    }
+
+    return res.status(201).json({
+      success: true,
+      message:
+        "Task created successfully",
+      task,
+    });
+  } catch (error) {
+    console.error(
+      "Create task controller error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Server error while creating task",
+    });
+  }
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| UPDATE TASK
+|--------------------------------------------------------------------------
+*/
+
+export async function updateTask(req, res) {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Task ID is required",
+      });
+    }
+
+    const {
+      title,
+      description,
+      type,
+      target,
+      reward,
+      active,
+    } = req.body;
+
+    const updateData = {};
+
+    if (title !== undefined) {
+      const taskTitle =
+        typeof title === "string"
+          ? title.trim()
+          : "";
+
+      if (!taskTitle) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Task title cannot be empty",
+        });
+      }
+
+      updateData.title =
+        taskTitle;
+    }
+
+    if (description !== undefined) {
+      updateData.description =
+        typeof description === "string"
+          ? description.trim() || null
+          : null;
+    }
+
+    if (type !== undefined) {
+      const taskType =
+        typeof type === "string"
+          ? type.trim()
+          : "";
+
+      if (!taskType) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Task type cannot be empty",
+        });
+      }
+
+      updateData.type =
+        taskType;
+    }
+
+    if (target !== undefined) {
+      const taskTarget =
+        typeof target === "string"
+          ? target.trim()
+          : "";
+
+      if (!taskTarget) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Task target cannot be empty",
+        });
+      }
+
+      updateData.target =
+        taskTarget;
+    }
+
+    if (reward !== undefined) {
+      const taskReward =
+        Number(reward);
+
+      if (
+        !Number.isFinite(taskReward) ||
+        taskReward <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Task reward must be greater than 0",
+        });
+      }
+
+      updateData.reward =
+        taskReward;
+    }
+
+    if (active !== undefined) {
+      if (
+        typeof active !== "boolean"
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Active must be true or false",
+        });
+      }
+
+      updateData.active =
+        active;
+    }
+
+    if (
+      Object.keys(updateData).length === 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "No task changes provided",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CHECK TASK EXISTS
+    |--------------------------------------------------------------------------
+    */
+
+    const {
+      data: existingTask,
+      error: existingError,
+    } = await supabase
+      .from("tasks")
+      .select("id")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (existingError) {
+      console.error(
+        "Existing task lookup error:",
+        existingError
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Could not verify task",
+      });
+    }
+
+    if (!existingTask) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Task not found",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | UPDATE TASK
+    |--------------------------------------------------------------------------
+    */
+
+    const {
+      data: task,
+      error,
+    } = await supabase
+      .from("tasks")
+      .update(updateData)
+      .eq("id", id)
+      .select(`
+        id,
+        title,
+        description,
+        type,
+        target,
+        reward,
+        active,
+        created_at,
+        updated_at
+      `)
+      .single();
+
+    if (error) {
+      console.error(
+        "Update task database error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          error.message ||
+          "Could not update task",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message:
+        "Task updated successfully",
+      task,
+    });
+  } catch (error) {
+    console.error(
+      "Update task controller error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Server error while updating task",
+    });
+  }
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| DELETE TASK
+|--------------------------------------------------------------------------
+*/
+
+export async function deleteTask(req, res) {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Task ID is required",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CHECK TASK EXISTS
+    |--------------------------------------------------------------------------
+    */
+
+    const {
+      data: existingTask,
+      error: existingError,
+    } = await supabase
+      .from("tasks")
+      .select("id, title")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (existingError) {
+      console.error(
+        "Delete task lookup error:",
+        existingError
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Could not find task",
+      });
+    }
+
+    if (!existingTask) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Task not found",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | DELETE TASK
+    |--------------------------------------------------------------------------
+    */
+
+    const {
+      error,
+    } = await supabase
+      .from("tasks")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      console.error(
+        "Delete task database error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          error.message ||
+          "Could not delete task",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message:
+        "Task deleted successfully",
+    });
+  } catch (error) {
+    console.error(
+      "Delete task controller error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Server error while deleting task",
+    });
+  }
+}
