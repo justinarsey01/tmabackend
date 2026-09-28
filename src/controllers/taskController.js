@@ -14,13 +14,114 @@ const supabase = createClient(
 |--------------------------------------------------------------------------
 | GET ACTIVE TASKS
 |--------------------------------------------------------------------------
+|
+| Returns active tasks plus whether the authenticated user has already
+| completed each task.
+|
+|--------------------------------------------------------------------------
 */
 
 export async function getTasks(req, res) {
   try {
+
+    /*
+    |--------------------------------------------------------------------------
+    | Get Telegram authentication data
+    |--------------------------------------------------------------------------
+    */
+
+    const initData = req.telegramInitData;
+
+    if (!initData) {
+      return res.status(401).json({
+        success: false,
+        message: "Telegram authentication data is missing",
+      });
+    }
+
+    const data = parse(initData);
+
+    const telegramUser = data.user;
+
+    if (!telegramUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Telegram user not found",
+      });
+    }
+
+    const telegramId = String(
+      telegramUser.id
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Find CoinEarn profile
+    |--------------------------------------------------------------------------
+    */
+
     const {
-      data,
-      error,
+      data: profile,
+      error: profileError,
+    } = await supabase
+      .from("profiles")
+      .select(`
+        id,
+        telegram_id,
+        is_active
+      `)
+      .eq(
+        "telegram_id",
+        telegramId
+      )
+      .maybeSingle();
+
+
+    if (profileError) {
+      console.error(
+        "Profile lookup error:",
+        profileError
+      );
+
+      return res.status(500).json({
+        success: false,
+        message: "Could not find your profile",
+      });
+    }
+
+
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: "CoinEarn profile not found",
+      });
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Check account status
+    |--------------------------------------------------------------------------
+    */
+
+    if (!profile.is_active) {
+      return res.status(403).json({
+        success: false,
+        message: "Your account has been deactivated.",
+      });
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Get active tasks
+    |--------------------------------------------------------------------------
+    */
+
+    const {
+      data: tasks,
+      error: tasksError,
     } = await supabase
       .from("tasks")
       .select(`
@@ -36,10 +137,11 @@ export async function getTasks(req, res) {
         ascending: true,
       });
 
-    if (error) {
+
+    if (tasksError) {
       console.error(
         "Get tasks error:",
-        error
+        tasksError
       );
 
       return res.status(500).json({
@@ -48,12 +150,91 @@ export async function getTasks(req, res) {
       });
     }
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | Get tasks already completed by this user
+    |--------------------------------------------------------------------------
+    |
+    | IMPORTANT:
+    |
+    | Change "task_completions" below only if your existing table has
+    | a different name.
+    |
+    |--------------------------------------------------------------------------
+    */
+
+    const {
+      data: completedRows,
+      error: completedError,
+    } = await supabase
+      .from("task_completions")
+      .select(`
+        task_id
+      `)
+      .eq(
+        "user_id",
+        profile.id
+      );
+
+
+    if (completedError) {
+      console.error(
+        "Completed tasks lookup error:",
+        completedError
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Could not load your completed tasks",
+      });
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Create a fast lookup set
+    |--------------------------------------------------------------------------
+    */
+
+    const completedTaskIds = new Set(
+      (completedRows || []).map(
+        (row) => String(row.task_id)
+      )
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Add completed status to every task
+    |--------------------------------------------------------------------------
+    */
+
+    const formattedTasks =
+      (tasks || []).map((task) => ({
+        ...task,
+
+        completed:
+          completedTaskIds.has(
+            String(task.id)
+          ),
+      }));
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Return tasks
+    |--------------------------------------------------------------------------
+    */
+
     return res.json({
       success: true,
-      tasks: data || [],
+      tasks: formattedTasks,
     });
 
   } catch (error) {
+
     console.error(
       "Tasks controller error:",
       error
@@ -85,6 +266,14 @@ export async function completeTask(req, res) {
     const initData =
       req.telegramInitData;
 
+    if (!initData) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "Telegram authentication data is missing",
+      });
+    }
+
     const data =
       parse(initData);
 
@@ -95,7 +284,8 @@ export async function completeTask(req, res) {
     if (!telegramUser) {
       return res.status(400).json({
         success: false,
-        message: "Telegram user not found",
+        message:
+          "Telegram user not found",
       });
     }
 
@@ -118,7 +308,8 @@ export async function completeTask(req, res) {
     if (!taskId) {
       return res.status(400).json({
         success: false,
-        message: "Task ID is required",
+        message:
+          "Task ID is required",
       });
     }
 
