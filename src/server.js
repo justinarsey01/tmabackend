@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-
+import adsRoutes from "./routes/ads.js";
 import authRoutes from "./routes/auth.js";
 import miningRoutes from "./routes/mining.js";
 import taskRoutes from "./routes/tasks.js";
@@ -65,6 +65,7 @@ app.use(
   "/api/admin",
   adminRoutes
 );
+app.use("/api/ads", adsRoutes);
 
 export default app;
 

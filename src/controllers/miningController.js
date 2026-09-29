@@ -1,3 +1,4 @@
+
 import dotenv from "dotenv";
 import { parse } from "@tma.js/init-data-node";
 import { createClient } from "@supabase/supabase-js";
@@ -9,11 +10,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-
 export async function mineCoin(req, res) {
-
   try {
-
     /*
     --------------------------------------------------
     Telegram authentication has already been verified
@@ -21,30 +19,27 @@ export async function mineCoin(req, res) {
     --------------------------------------------------
     */
 
-    const initData =
-      req.telegramInitData;
+    const initData = req.telegramInitData;
 
-    const data =
-      parse(initData);
-
-    const telegramUser =
-      data.user;
-
-
-    if (!telegramUser) {
-
-      return res.status(400).json({
+    if (!initData) {
+      return res.status(401).json({
         success: false,
-        message:
-          "Telegram user not found",
+        message: "Telegram authentication data is missing",
       });
-
     }
 
+    const data = parse(initData);
 
-    const telegramId =
-      String(telegramUser.id);
+    const telegramUser = data.user;
 
+    if (!telegramUser) {
+      return res.status(400).json({
+        success: false,
+        message: "Telegram user not found",
+      });
+    }
+
+    const telegramId = String(telegramUser.id);
 
     /*
     --------------------------------------------------
@@ -57,19 +52,11 @@ export async function mineCoin(req, res) {
       error: profileError,
     } = await supabase
       .from("profiles")
-     .select(
-  "id,balance,telegram_id,is_active"
-)
-      
-      .eq(
-        "telegram_id",
-        telegramId
-      )
+      .select("id,balance,telegram_id,is_active")
+      .eq("telegram_id", telegramId)
       .maybeSingle();
 
-
     if (profileError) {
-
       console.error(
         "Profile lookup error:",
         profileError
@@ -77,26 +64,35 @@ export async function mineCoin(req, res) {
 
       return res.status(500).json({
         success: false,
-        message:
-          "Could not find your profile",
+        message: "Could not find your profile",
       });
-
     }
 
+    /*
+    --------------------------------------------------
+    Make sure profile exists
+    --------------------------------------------------
+    */
 
     if (!profile) {
-if (!profile.is_active) {
-
-  return res.status(403).json({
-    success: false,
-    message:
-      "Your account has been deactivated.",
-  });
-
-}
-
+      return res.status(404).json({
+        success: false,
+        message: "Profile not found",
+      });
     }
 
+    /*
+    --------------------------------------------------
+    Check account status
+    --------------------------------------------------
+    */
+
+    if (profile.is_active === false) {
+      return res.status(403).json({
+        success: false,
+        message: "Your account has been deactivated.",
+      });
+    }
 
     /*
     --------------------------------------------------
@@ -107,17 +103,11 @@ if (!profile.is_active) {
     const {
       data: result,
       error: miningError,
-    } = await supabase.rpc(
-      "mine_coin",
-      {
-        p_user_id:
-          profile.id,
-      }
-    );
-
+    } = await supabase.rpc("mine_coin", {
+      p_user_id: profile.id,
+    });
 
     if (miningError) {
-
       console.error(
         "Mining RPC error:",
         miningError
@@ -126,28 +116,41 @@ if (!profile.is_active) {
       return res.status(400).json({
         success: false,
         message:
-          miningError.message ||
-          "Mining failed",
+          miningError.message || "Mining failed",
       });
-
     }
 
+    /*
+    --------------------------------------------------
+    Make sure RPC returned a result
+    --------------------------------------------------
+    */
+
+    if (!result) {
+      return res.status(500).json({
+        success: false,
+        message: "Mining returned no result",
+      });
+    }
+
+    /*
+    --------------------------------------------------
+    Return updated mining state
+    --------------------------------------------------
+    */
 
     return res.json({
       success: true,
-      balance:
-        Number(result.balance),
 
-      energy:
-        Number(result.energy),
+      balance: Number(result.balance || 0),
+
+      energy: Number(result.energy || 0),
 
       last_energy_update:
-        result.last_energy_update,
+        result.last_energy_update || null,
     });
 
-
   } catch (error) {
-
     console.error(
       "Mining controller error:",
       error
@@ -155,10 +158,8 @@ if (!profile.is_active) {
 
     return res.status(500).json({
       success: false,
-      message:
-        "Mining request failed",
+      message: "Mining request failed",
     });
-
   }
-
 }
+
