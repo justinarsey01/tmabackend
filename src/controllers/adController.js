@@ -12,14 +12,6 @@ const ADS_REWARD = 1500;
 
 export async function adsgramReward(req, res) {
   try {
-    /*
-    AdsGram sends the Telegram user ID in the
-    userid query parameter.
-
-    Example:
-    /api/ads/reward?userid=123456789
-    */
-
     const telegramId = String(req.query.userid || "").trim();
 
     if (!telegramId) {
@@ -29,20 +21,17 @@ export async function adsgramReward(req, res) {
       });
     }
 
-    /*
-    --------------------------------------------------
-    Find the CoinEarn profile
-    --------------------------------------------------
-    */
+    console.log("AdsGram reward request for Telegram ID:", telegramId);
 
-    const {
-      data: profile,
-      error: profileError,
-    } = await supabase
-      .from("profiles")
-      .select("id, telegram_id, balance, total_earned, is_active")
-      .eq("telegram_id", telegramId)
-      .maybeSingle();
+    // Find the correct CoinEarn user
+    const { data: profile, error: profileError } =
+      await supabase
+        .from("profiles")
+        .select(
+          "id, telegram_id, balance, total_earned, is_active"
+        )
+        .eq("telegram_id", telegramId)
+        .maybeSingle();
 
     if (profileError) {
       console.error(
@@ -63,12 +52,7 @@ export async function adsgramReward(req, res) {
       });
     }
 
-    /*
-    --------------------------------------------------
-    Check account status
-    --------------------------------------------------
-    */
-
+    // Prevent rewards for deactivated accounts
     if (profile.is_active === false) {
       return res.status(403).json({
         success: false,
@@ -76,26 +60,12 @@ export async function adsgramReward(req, res) {
       });
     }
 
-    /*
-    --------------------------------------------------
-    Secure atomic reward
-    --------------------------------------------------
-
-    The database function performs the balance update
-    so two simultaneous requests cannot corrupt the
-    wallet balance.
-    */
-
-    const {
-      data: result,
-      error: rewardError,
-    } = await supabase.rpc(
-      "reward_adsgram",
-      {
+    // Atomically add the reward
+    const { data: result, error: rewardError } =
+      await supabase.rpc("reward_adsgram", {
         p_user_id: profile.id,
         p_reward: ADS_REWARD,
-      }
-    );
+      });
 
     if (rewardError) {
       console.error(
@@ -109,13 +79,16 @@ export async function adsgramReward(req, res) {
       });
     }
 
+    console.log(
+      `AdsGram reward credited: ${ADS_REWARD} Coins to Telegram ID ${telegramId}`
+    );
+
     return res.json({
       success: true,
       message: "AdsGram reward credited",
       reward: ADS_REWARD,
-      balance: Number(result.balance),
+      balance: Number(result?.balance || 0),
     });
-
   } catch (error) {
     console.error(
       "AdsGram reward controller error:",
