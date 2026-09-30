@@ -13,12 +13,7 @@ const router = express.Router();
 
 /*
 |--------------------------------------------------------------------------
-| AdsGram reward callback
-|--------------------------------------------------------------------------
-|
-| AdsGram calls this directly.
-| DO NOT put telegramAuth here.
-|
+| AdsGram server callback
 |--------------------------------------------------------------------------
 */
 
@@ -29,12 +24,7 @@ router.get(
 
 /*
 |--------------------------------------------------------------------------
-| Check user's AdsGram cooldown
-|--------------------------------------------------------------------------
-|
-| This is called by the TMA itself.
-| Telegram authentication protects this endpoint.
-|
+| CoinEarn frontend cooldown status
 |--------------------------------------------------------------------------
 */
 

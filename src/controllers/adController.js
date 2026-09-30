@@ -1,3 +1,210 @@
+import dotenv from "dotenv";
+import { createClient } from "@supabase/supabase-js";
+import { parse } from "@tma.js/init-data-node";
+
+dotenv.config();
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
+const ADS_REWARD = 1500;
+const COOLDOWN_HOURS = 3;
+
+/*
+|--------------------------------------------------------------------------
+| AdsGram Reward
+|--------------------------------------------------------------------------
+|
+| Called by the AdsGram Reward URL.
+| The server checks the user's profile and lets the database RPC
+| enforce the 3-hour cooldown.
+|
+|--------------------------------------------------------------------------
+*/
+
+export async function adsgramReward(req, res) {
+  try {
+    const telegramId =
+      String(req.query.userid || "").trim();
+
+    if (!telegramId) {
+      return res.status(400).json({
+        success: false,
+        message: "Telegram user ID is required",
+      });
+    }
+
+    console.log(
+      "AdsGram reward request for Telegram ID:",
+      telegramId
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Find CoinEarn profile
+    |--------------------------------------------------------------------------
+    */
+
+    const {
+      data: profile,
+      error: profileError,
+    } = await supabase
+      .from("profiles")
+      .select(
+        "id, telegram_id, balance, total_earned, is_active"
+      )
+      .eq(
+        "telegram_id",
+        telegramId
+      )
+      .maybeSingle();
+
+    if (profileError) {
+      console.error(
+        "AdsGram profile lookup error:",
+        profileError
+      );
+
+      return res.status(500).json({
+        success: false,
+        message: "Could not find user",
+      });
+    }
+
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: "CoinEarn profile not found",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Check account status
+    |--------------------------------------------------------------------------
+    */
+
+    if (profile.is_active === false) {
+      return res.status(403).json({
+        success: false,
+        message: "Account has been deactivated",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Credit reward through Supabase RPC
+    |--------------------------------------------------------------------------
+    |
+    | The RPC handles:
+    | - 3-hour cooldown
+    | - balance update
+    | - total_earned update
+    | - ad_rewards history
+    |
+    |--------------------------------------------------------------------------
+    */
+
+    const {
+      data: result,
+      error: rewardError,
+    } = await supabase.rpc(
+      "reward_adsgram",
+      {
+        p_user_id: profile.id,
+        p_reward: ADS_REWARD,
+        p_telegram_id: telegramId,
+      }
+    );
+
+    if (rewardError) {
+      console.error(
+        "AdsGram reward RPC error:",
+        rewardError
+      );
+
+      /*
+      |--------------------------------------------------------------------------
+      | Cooldown
+      |--------------------------------------------------------------------------
+      */
+
+      if (
+        rewardError.message?.includes(
+          "cooldown"
+        )
+      ) {
+        return res.status(429).json({
+          success: false,
+          cooldown: true,
+          message:
+            "Your AdsGram reward is on cooldown. Please try again later.",
+        });
+      }
+
+      return res.status(500).json({
+        success: false,
+        message: "Could not credit reward",
+      });
+    }
+
+    console.log(
+      `AdsGram reward credited: ${ADS_REWARD} Coins to Telegram ID ${telegramId}`
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Return successful reward
+    |--------------------------------------------------------------------------
+    */
+
+    const nextRewardAt =
+      new Date(
+        Date.now() +
+          COOLDOWN_HOURS *
+            60 *
+            60 *
+            1000
+      ).toISOString();
+
+    return res.json({
+      success: true,
+      message: "AdsGram reward credited",
+      reward: ADS_REWARD,
+      balance: Number(
+        result?.balance || 0
+      ),
+      nextRewardAt,
+    });
+
+  } catch (error) {
+    console.error(
+      "AdsGram reward controller error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "AdsGram reward failed",
+    });
+  }
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| AdsGram Reward Status
+|--------------------------------------------------------------------------
+|
+| Called by the CoinEarn frontend.
+| Uses Telegram authentication to determine whether the user
+| can receive another AdsGram reward.
+|
+|--------------------------------------------------------------------------
+*/
+
 export async function adsgramRewardStatus(req, res) {
   try {
     /*
@@ -6,7 +213,8 @@ export async function adsgramRewardStatus(req, res) {
     |--------------------------------------------------------------------------
     */
 
-    const initData = req.telegramInitData;
+    const initData =
+      req.telegramInitData;
 
     if (!initData) {
       return res.status(401).json({
@@ -16,9 +224,11 @@ export async function adsgramRewardStatus(req, res) {
       });
     }
 
-    const data = parse(initData);
+    const data =
+      parse(initData);
 
-    const telegramUser = data.user;
+    const telegramUser =
+      data.user;
 
     if (!telegramUser) {
       return res.status(401).json({
@@ -29,7 +239,9 @@ export async function adsgramRewardStatus(req, res) {
     }
 
     const telegramId =
-      String(telegramUser.id);
+      String(
+        telegramUser.id
+      );
 
     /*
     |--------------------------------------------------------------------------
@@ -78,7 +290,9 @@ export async function adsgramRewardStatus(req, res) {
     |--------------------------------------------------------------------------
     */
 
-    if (profile.is_active === false) {
+    if (
+      profile.is_active === false
+    ) {
       return res.status(403).json({
         success: false,
         message:
@@ -97,7 +311,9 @@ export async function adsgramRewardStatus(req, res) {
       error: rewardError,
     } = await supabase
       .from("ad_rewards")
-      .select("created_at")
+      .select(
+        "created_at"
+      )
       .eq(
         "user_id",
         profile.id
@@ -130,7 +346,7 @@ export async function adsgramRewardStatus(req, res) {
 
     /*
     |--------------------------------------------------------------------------
-    | User has never watched an AdsGram ad
+    | No previous reward
     |--------------------------------------------------------------------------
     */
 
@@ -155,7 +371,10 @@ export async function adsgramRewardStatus(req, res) {
       ).getTime();
 
     const cooldownMs =
-      3 * 60 * 60 * 1000;
+      COOLDOWN_HOURS *
+      60 *
+      60 *
+      1000;
 
     const nextRewardTime =
       lastRewardTime +
