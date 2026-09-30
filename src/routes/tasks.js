@@ -9,15 +9,7 @@ import {
   completeTask,
 } from "../controllers/taskController.js";
 
-
 const router = express.Router();
-
-
-/*
-|--------------------------------------------------------------------------
-| GET ACTIVE TASKS
-|--------------------------------------------------------------------------
-*/
 
 router.get(
   "/",
@@ -25,18 +17,10 @@ router.get(
   getTasks
 );
 
-
-/*
-|--------------------------------------------------------------------------
-| COMPLETE TASK
-|--------------------------------------------------------------------------
-*/
-
 router.post(
   "/complete",
   telegramAuth,
   completeTask
 );
-
 
 export default router;

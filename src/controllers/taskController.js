@@ -9,27 +9,14 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-
 /*
 |--------------------------------------------------------------------------
 | GET ACTIVE TASKS
-|--------------------------------------------------------------------------
-|
-| Returns active tasks plus whether the authenticated user has already
-| completed each task.
-|
 |--------------------------------------------------------------------------
 */
 
 export async function getTasks(req, res) {
   try {
-
-    /*
-    |--------------------------------------------------------------------------
-    | Get Telegram authentication data
-    |--------------------------------------------------------------------------
-    */
-
     const initData = req.telegramInitData;
 
     if (!initData) {
@@ -40,7 +27,6 @@ export async function getTasks(req, res) {
     }
 
     const data = parse(initData);
-
     const telegramUser = data.user;
 
     if (!telegramUser) {
@@ -50,16 +36,11 @@ export async function getTasks(req, res) {
       });
     }
 
-    const telegramId = String(
-      telegramUser.id
-    );
+    const telegramId = String(telegramUser.id);
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | Find CoinEarn profile
-    |--------------------------------------------------------------------------
-    */
+    console.log("GET TASKS REQUEST:", {
+      telegramId,
+    });
 
     const {
       data: profile,
@@ -71,12 +52,8 @@ export async function getTasks(req, res) {
         telegram_id,
         is_active
       `)
-      .eq(
-        "telegram_id",
-        telegramId
-      )
+      .eq("telegram_id", telegramId)
       .maybeSingle();
-
 
     if (profileError) {
       console.error(
@@ -90,7 +67,6 @@ export async function getTasks(req, res) {
       });
     }
 
-
     if (!profile) {
       return res.status(404).json({
         success: false,
@@ -98,26 +74,12 @@ export async function getTasks(req, res) {
       });
     }
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | Check account status
-    |--------------------------------------------------------------------------
-    */
-
     if (!profile.is_active) {
       return res.status(403).json({
         success: false,
         message: "Your account has been deactivated.",
       });
     }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | Get active tasks
-    |--------------------------------------------------------------------------
-    */
 
     const {
       data: tasks,
@@ -137,7 +99,6 @@ export async function getTasks(req, res) {
         ascending: true,
       });
 
-
     if (tasksError) {
       console.error(
         "Get tasks error:",
@@ -150,33 +111,13 @@ export async function getTasks(req, res) {
       });
     }
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | Get tasks already completed by this user
-    |--------------------------------------------------------------------------
-    |
-    | IMPORTANT:
-    |
-    | Change "task_completions" below only if your existing table has
-    | a different name.
-    |
-    |--------------------------------------------------------------------------
-    */
-
     const {
       data: completedRows,
       error: completedError,
     } = await supabase
       .from("task_completions")
-      .select(`
-        task_id
-      `)
-      .eq(
-        "user_id",
-        profile.id
-      );
-
+      .select("task_id")
+      .eq("user_id", profile.id);
 
     if (completedError) {
       console.error(
@@ -186,17 +127,9 @@ export async function getTasks(req, res) {
 
       return res.status(500).json({
         success: false,
-        message:
-          "Could not load your completed tasks",
+        message: "Could not load your completed tasks",
       });
     }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | Create a fast lookup set
-    |--------------------------------------------------------------------------
-    */
 
     const completedTaskIds = new Set(
       (completedRows || []).map(
@@ -204,29 +137,19 @@ export async function getTasks(req, res) {
       )
     );
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | Add completed status to every task
-    |--------------------------------------------------------------------------
-    */
-
-    const formattedTasks =
-      (tasks || []).map((task) => ({
+    const formattedTasks = (tasks || []).map(
+      (task) => ({
         ...task,
+        completed: completedTaskIds.has(
+          String(task.id)
+        ),
+      })
+    );
 
-        completed:
-          completedTaskIds.has(
-            String(task.id)
-          ),
-      }));
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | Return tasks
-    |--------------------------------------------------------------------------
-    */
+    console.log(
+      "TASKS LOADED:",
+      formattedTasks.length
+    );
 
     return res.json({
       success: true,
@@ -234,7 +157,6 @@ export async function getTasks(req, res) {
     });
 
   } catch (error) {
-
     console.error(
       "Tasks controller error:",
       error
@@ -247,7 +169,6 @@ export async function getTasks(req, res) {
   }
 }
 
-
 /*
 |--------------------------------------------------------------------------
 | COMPLETE TASK
@@ -256,69 +177,53 @@ export async function getTasks(req, res) {
 
 export async function completeTask(req, res) {
   try {
-
-    /*
-    |--------------------------------------------------------------------------
-    | Get Telegram authentication data
-    |--------------------------------------------------------------------------
-    */
-
-    const initData =
-      req.telegramInitData;
+    const initData = req.telegramInitData;
 
     if (!initData) {
+      console.error(
+        "COMPLETE TASK: Telegram authentication data missing"
+      );
+
       return res.status(401).json({
         success: false,
-        message:
-          "Telegram authentication data is missing",
+        message: "Telegram authentication data is missing",
       });
     }
 
-    const data =
-      parse(initData);
-
-    const telegramUser =
-      data.user;
-
+    const data = parse(initData);
+    const telegramUser = data.user;
 
     if (!telegramUser) {
+      console.error(
+        "COMPLETE TASK: Telegram user not found"
+      );
+
       return res.status(400).json({
         success: false,
-        message:
-          "Telegram user not found",
+        message: "Telegram user not found",
       });
     }
 
+    const telegramId = String(
+      telegramUser.id
+    );
 
-    const telegramId =
-      String(telegramUser.id);
+    const { taskId } = req.body;
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | Get task ID
-    |--------------------------------------------------------------------------
-    */
-
-    const {
-      taskId,
-    } = req.body;
-
+    console.log(
+      "COMPLETE TASK REQUEST:",
+      {
+        telegramId,
+        taskId,
+      }
+    );
 
     if (!taskId) {
       return res.status(400).json({
         success: false,
-        message:
-          "Task ID is required",
+        message: "Task ID is required",
       });
     }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | Find CoinEarn profile
-    |--------------------------------------------------------------------------
-    */
 
     const {
       data: profile,
@@ -331,12 +236,8 @@ export async function completeTask(req, res) {
         balance,
         is_active
       `)
-      .eq(
-        "telegram_id",
-        telegramId
-      )
+      .eq("telegram_id", telegramId)
       .maybeSingle();
-
 
     if (profileError) {
       console.error(
@@ -346,41 +247,38 @@ export async function completeTask(req, res) {
 
       return res.status(500).json({
         success: false,
-        message:
-          "Could not find your profile",
+        message: "Could not find your profile",
       });
     }
-
 
     if (!profile) {
+      console.error(
+        "COMPLETE TASK: Profile not found:",
+        telegramId
+      );
+
       return res.status(404).json({
         success: false,
-        message:
-          "CoinEarn profile not found",
+        message: "CoinEarn profile not found",
       });
     }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | Check account status
-    |--------------------------------------------------------------------------
-    */
 
     if (!profile.is_active) {
       return res.status(403).json({
         success: false,
-        message:
-          "Your account has been deactivated.",
+        message: "Your account has been deactivated.",
       });
     }
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | Complete task using secure database function
-    |--------------------------------------------------------------------------
-    */
+    console.log(
+      "COMPLETE TASK USER:",
+      {
+        telegramId,
+        profileId: profile.id,
+        currentBalance: profile.balance,
+        taskId,
+      }
+    );
 
     const {
       data: result,
@@ -388,27 +286,20 @@ export async function completeTask(req, res) {
     } = await supabase.rpc(
       "complete_task",
       {
-        p_user_id:
-          profile.id,
-
-        p_task_id:
-          taskId,
+        p_user_id: profile.id,
+        p_task_id: taskId,
       }
     );
 
-
     if (taskError) {
-
       console.error(
-        "Complete task RPC error:",
+        "COMPLETE TASK RPC ERROR:",
         taskError
       );
-
 
       let message =
         taskError.message ||
         "Could not complete task";
-
 
       if (
         message.includes(
@@ -419,7 +310,6 @@ export async function completeTask(req, res) {
           "You have already completed this task.";
       }
 
-
       if (
         message.includes(
           "Task not found or inactive"
@@ -429,46 +319,57 @@ export async function completeTask(req, res) {
           "This task is no longer available.";
       }
 
-
       return res.status(400).json({
         success: false,
         message,
       });
     }
 
+    if (!result) {
+      console.error(
+        "COMPLETE TASK: RPC returned no result"
+      );
 
-    /*
-    |--------------------------------------------------------------------------
-    | Return result
-    |--------------------------------------------------------------------------
-    */
+      return res.status(500).json({
+        success: false,
+        message:
+          "Task completion returned no result",
+      });
+    }
+
+    const reward = Number(
+      result.reward || 0
+    );
+
+    const balance = Number(
+      result.balance || 0
+    );
+
+    console.log(
+      "TASK COMPLETED SUCCESSFULLY:",
+      {
+        telegramId,
+        taskId,
+        reward,
+        balance,
+      }
+    );
 
     return res.json({
       success: true,
-
-      reward:
-        Number(
-          result.reward || 0
-        ),
-
-      balance:
-        Number(
-          result.balance || 0
-        ),
+      reward,
+      balance,
     });
 
-
   } catch (error) {
-
     console.error(
-      "Complete task controller error:",
+      "COMPLETE TASK CONTROLLER ERROR:",
       error
     );
 
     return res.status(500).json({
       success: false,
-      message:
-        "Task completion failed",
+      message: "Task completion failed",
     });
   }
 }
