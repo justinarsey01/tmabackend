@@ -12,7 +12,15 @@ const ADS_REWARD = 1500;
 
 export async function adsgramReward(req, res) {
   try {
-    const telegramId = String(req.query.userid || "").trim();
+    /*
+    |--------------------------------------------------------------------------
+    | Get Telegram ID from AdsGram Reward URL
+    |--------------------------------------------------------------------------
+    */
+
+    const telegramId = String(
+      req.query.userid || ""
+    ).trim();
 
     if (!telegramId) {
       return res.status(400).json({
@@ -21,17 +29,27 @@ export async function adsgramReward(req, res) {
       });
     }
 
-    console.log("AdsGram reward request for Telegram ID:", telegramId);
+    console.log(
+      "AdsGram reward request for Telegram ID:",
+      telegramId
+    );
 
-    // Find the correct CoinEarn user
-    const { data: profile, error: profileError } =
-      await supabase
-        .from("profiles")
-        .select(
-          "id, telegram_id, balance, total_earned, is_active"
-        )
-        .eq("telegram_id", telegramId)
-        .maybeSingle();
+    /*
+    |--------------------------------------------------------------------------
+    | Find CoinEarn profile
+    |--------------------------------------------------------------------------
+    */
+
+    const {
+      data: profile,
+      error: profileError,
+    } = await supabase
+      .from("profiles")
+      .select(
+        "id, telegram_id, balance, total_earned, is_active"
+      )
+      .eq("telegram_id", telegramId)
+      .maybeSingle();
 
     if (profileError) {
       console.error(
@@ -52,20 +70,52 @@ export async function adsgramReward(req, res) {
       });
     }
 
-    // Prevent rewards for deactivated accounts
+    /*
+    |--------------------------------------------------------------------------
+    | Check account status
+    |--------------------------------------------------------------------------
+    */
+
     if (profile.is_active === false) {
       return res.status(403).json({
         success: false,
-        message: "Account has been deactivated",
+        message:
+          "Account has been deactivated",
       });
     }
 
-    // Atomically add the reward
-    const { data: result, error: rewardError } =
-      await supabase.rpc("reward_adsgram", {
+    /*
+    |--------------------------------------------------------------------------
+    | Credit AdsGram reward
+    |--------------------------------------------------------------------------
+    |
+    | The Supabase function handles:
+    |
+    | - 1,500 Coin reward
+    | - 3-hour cooldown
+    | - wallet update
+    | - reward history
+    |
+    |--------------------------------------------------------------------------
+    */
+
+    const {
+      data: result,
+      error: rewardError,
+    } = await supabase.rpc(
+      "reward_adsgram",
+      {
         p_user_id: profile.id,
         p_reward: ADS_REWARD,
-      });
+        p_telegram_id: telegramId,
+      }
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Handle reward errors
+    |--------------------------------------------------------------------------
+    */
 
     if (rewardError) {
       console.error(
@@ -73,22 +123,66 @@ export async function adsgramReward(req, res) {
         rewardError
       );
 
+      /*
+       * User is still inside the 3-hour cooldown.
+       */
+      if (
+        rewardError.message?.includes(
+          "cooldown"
+        )
+      ) {
+        return res.status(429).json({
+          success: false,
+          cooldown: true,
+          message:
+            "Your AdsGram reward is on cooldown. Please try again later.",
+        });
+      }
+
       return res.status(500).json({
         success: false,
-        message: "Could not credit reward",
+        message:
+          "Could not credit reward",
       });
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Successful reward
+    |--------------------------------------------------------------------------
+    */
 
     console.log(
       `AdsGram reward credited: ${ADS_REWARD} Coins to Telegram ID ${telegramId}`
     );
 
+    /*
+     * The next reward becomes available 3 hours
+     * after this successful reward.
+     */
+    const nextRewardAt =
+      new Date(
+        Date.now() +
+          3 * 60 * 60 * 1000
+      ).toISOString();
+
     return res.json({
       success: true,
-      message: "AdsGram reward credited",
-      reward: ADS_REWARD,
-      balance: Number(result?.balance || 0),
+
+      message:
+        "AdsGram reward credited",
+
+      reward:
+        ADS_REWARD,
+
+      balance:
+        Number(
+          result?.balance || 0
+        ),
+
+      nextRewardAt,
     });
+
   } catch (error) {
     console.error(
       "AdsGram reward controller error:",
@@ -97,7 +191,8 @@ export async function adsgramReward(req, res) {
 
     return res.status(500).json({
       success: false,
-      message: "AdsGram reward failed",
+      message:
+        "AdsGram reward failed",
     });
   }
 }
