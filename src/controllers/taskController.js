@@ -1,6 +1,10 @@
 import dotenv from "dotenv";
 import { parse } from "@tma.js/init-data-node";
 import { createClient } from "@supabase/supabase-js";
+import {
+  MIN_WAIT_SECONDS,
+  verifyTaskCompletion,
+} from "./taskVerification.js";
 
 dotenv.config();
 
@@ -9,6 +13,11 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+/*
+|--------------------------------------------------------------------------
+| GET ACTIVE TASKS
+|--------------------------------------------------------------------------
+*/
 /*
 |--------------------------------------------------------------------------
 | GET ACTIVE TASKS
@@ -41,6 +50,12 @@ export async function getTasks(req, res) {
     console.log("GET TASKS REQUEST:", {
       telegramId,
     });
+
+    /*
+    |--------------------------------------------------------------------------
+    | FIND PROFILE
+    |--------------------------------------------------------------------------
+    */
 
     const {
       data: profile,
@@ -81,6 +96,12 @@ export async function getTasks(req, res) {
       });
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | GET ACTIVE TASKS
+    |--------------------------------------------------------------------------
+    */
+
     const {
       data: tasks,
       error: tasksError,
@@ -92,7 +113,9 @@ export async function getTasks(req, res) {
         description,
         type,
         target,
-        reward
+        reward,
+        image_url,
+        advertiser
       `)
       .eq("active", true)
       .order("created_at", {
@@ -111,6 +134,12 @@ export async function getTasks(req, res) {
       });
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | GET COMPLETED TASKS
+    |--------------------------------------------------------------------------
+    */
+
     const {
       data: completedRows,
       error: completedError,
@@ -127,7 +156,8 @@ export async function getTasks(req, res) {
 
       return res.status(500).json({
         success: false,
-        message: "Could not load your completed tasks",
+        message:
+          "Could not load your completed tasks",
       });
     }
 
@@ -137,12 +167,54 @@ export async function getTasks(req, res) {
       )
     );
 
+    /*
+    |--------------------------------------------------------------------------
+    | GET STARTED TASKS (server-side wait timer)
+    |--------------------------------------------------------------------------
+    */
+
+    const { data: startRows } = await supabase
+      .from("task_starts")
+      .select("task_id, started_at")
+      .eq("user_id", profile.id);
+
+    const startedAt = new Map(
+      (startRows || []).map((row) => [
+        String(row.task_id),
+        new Date(row.started_at).getTime(),
+      ])
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | FORMAT TASKS
+    |--------------------------------------------------------------------------
+    */
+
     const formattedTasks = (tasks || []).map(
       (task) => ({
         ...task,
-        completed: completedTaskIds.has(
-          String(task.id)
-        ),
+
+        completed:
+          completedTaskIds.has(
+            String(task.id)
+          ),
+
+        ready_to_claim:
+          startedAt.has(String(task.id)) &&
+          Date.now() - startedAt.get(String(task.id)) >=
+            MIN_WAIT_SECONDS * 1000,
+
+        /*
+         * Make sure normal tasks have
+         * predictable values.
+         */
+        image_url:
+          task.image_url || null,
+
+        advertiser:
+          task.advertiser ||
+          "CoinEarn",
       })
     );
 
@@ -279,6 +351,19 @@ export async function completeTask(req, res) {
         taskId,
       }
     );
+
+    const check = await verifyTaskCompletion(
+      profile.id,
+      telegramId,
+      taskId
+    );
+
+    if (!check.ok) {
+      return res.status(check.status).json({
+        success: false,
+        message: check.message,
+      });
+    }
 
     const {
       data: result,
