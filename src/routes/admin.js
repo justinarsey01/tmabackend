@@ -19,14 +19,16 @@ import {
   createService,
   updateService,
 
+  getAdminOrders,
+  updateAdminOrderStatus,
+} from "../controllers/adminController.js";
+
+import {
   getAdminTasks,
   createTask,
   updateTask,
   deleteTask,
-
-  getAdminOrders,
-  updateAdminOrderStatus,
-} from "../controllers/adminController.js";
+} from "../controllers/adminTaskController.js";
 
 const router = express.Router();
 
