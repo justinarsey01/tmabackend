@@ -8,8 +8,11 @@ import taskRoutes from "./routes/tasks.js";
 import serviceRoutes from "./routes/services.js";
 import orderRoutes from "./routes/orders.js";
 import adminRoutes from "./routes/admin.js";
+import carouselRoutes from "./routes/carousel.js";
 
 dotenv.config();
+
+
 
 const app = express();
 
@@ -46,6 +49,9 @@ app.use(
   miningRoutes
 );
 
+app.use("/api/carousel",
+   carouselRoutes);
+   
 app.use(
   "/api/tasks",
   taskRoutes

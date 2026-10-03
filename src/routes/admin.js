@@ -30,6 +30,13 @@ import {
   deleteTask,
 } from "../controllers/adminTaskController.js";
 
+import {
+  getAdminCarousel,
+  createCarouselSlide,
+  updateCarouselSlide,
+  deleteCarouselSlide,
+} from "../controllers/carouselController.js";
+
 const router = express.Router();
 
 
@@ -132,6 +139,33 @@ router.patch(
 router.delete(
   "/tasks/:id",
   deleteTask
+);
+
+
+/*
+|--------------------------------------------------------------------------
+| HOME CAROUSEL
+|--------------------------------------------------------------------------
+*/
+
+router.get(
+  "/carousel",
+  getAdminCarousel
+);
+
+router.post(
+  "/carousel",
+  createCarouselSlide
+);
+
+router.patch(
+  "/carousel/:id",
+  updateCarouselSlide
+);
+
+router.delete(
+  "/carousel/:id",
+  deleteCarouselSlide
 );
 
 
