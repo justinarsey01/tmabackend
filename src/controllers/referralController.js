@@ -126,9 +126,11 @@ export async function getReferralInfo(req, res) {
     if (rowsError) {
       console.error("Referral list error:", rowsError);
 
+      // TEMPORARY DIAGNOSTIC: shows the real database reason on the card.
+      // Remove the part in brackets once the problem is fixed.
       return res.status(500).json({
         success: false,
-        message: "Could not load your referrals",
+        message: `Could not load your referrals [${rowsError.code || "error"}: ${rowsError.message}]`,
       });
     }
 
