@@ -117,14 +117,7 @@ export async function getReferralInfo(req, res) {
       error: rowsError,
     } = await supabase
       .from("referrals")
-      .select(`
-        referrer_bonus,
-        created_at,
-        profiles:referred_id (
-          first_name,
-          username
-        )
-      `)
+      .select("referred_id, referrer_bonus, created_at")
       .eq("referrer_id", profile.id)
       .order("created_at", {
         ascending: false,
@@ -146,11 +139,43 @@ export async function getReferralInfo(req, res) {
       0
     );
 
-    const friends = referrals.slice(0, 10).map((row) => ({
-      name:
-        row.profiles?.first_name ||
-        row.profiles?.username ||
-        "Friend",
+    /*
+    |--------------------------------------------------------------------------
+    | NAMES OF THE 10 MOST RECENT FRIENDS
+    |--------------------------------------------------------------------------
+    */
+
+    const recent = referrals.slice(0, 10);
+
+    let namesById = new Map();
+
+    if (recent.length > 0) {
+      const {
+        data: friendProfiles,
+        error: friendsError,
+      } = await supabase
+        .from("profiles")
+        .select("id, first_name, username")
+        .in(
+          "id",
+          recent.map((row) => row.referred_id)
+        );
+
+      if (friendsError) {
+        // Names are optional. Never fail the whole request for them.
+        console.error("Referral friends lookup error:", friendsError);
+      } else {
+        namesById = new Map(
+          (friendProfiles || []).map((friend) => [
+            friend.id,
+            friend.first_name || friend.username || "Friend",
+          ])
+        );
+      }
+    }
+
+    const friends = recent.map((row) => ({
+      name: namesById.get(row.referred_id) || "Friend",
       bonus: Number(row.referrer_bonus || 0),
       created_at: row.created_at,
     }));
