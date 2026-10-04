@@ -20,7 +20,8 @@ const REFERRER_BONUS = Number(process.env.REFERRER_BONUS || 500);
 const REFERRED_BONUS = Number(process.env.REFERRED_BONUS || 250);
 
 // Only accounts created within this time can claim a referral.
-const NEW_USER_WINDOW_MS = 60 * 60 * 1000;
+const NEW_USER_WINDOW_MS =
+  Number(process.env.REFERRAL_WINDOW_MINUTES || 60) * 60 * 1000;
 
 const BOT_USERNAME = (process.env.BOT_USERNAME || "coinearn90_bot")
   .trim()
@@ -224,18 +225,29 @@ export async function claimReferral(req, res) {
       });
     }
 
-    const notClaimed = () =>
-      res.json({
+    // Every "not claimed" outcome is logged with its reason so it is
+    // easy to see in the backend logs why a bonus was not paid.
+    const notClaimed = (reason) => {
+      console.log("REFERRAL NOT CLAIMED:", reason);
+
+      return res.json({
         success: true,
         claimed: false,
+        reason,
       });
+    };
 
     const startParam = String(data.startParam ?? data.start_param ?? "");
+
+    console.log("CLAIM REFERRAL REQUEST:", {
+      telegramId: String(data.user.id),
+      startParam,
+    });
 
     const match = /^ref_(\d{3,20})$/.exec(startParam);
 
     if (!match) {
-      return notClaimed();
+      return notClaimed("no_valid_start_param");
     }
 
     const referrerTelegramId = match[1];
@@ -243,7 +255,7 @@ export async function claimReferral(req, res) {
 
     // Nobody can refer themselves.
     if (referrerTelegramId === telegramId) {
-      return notClaimed();
+      return notClaimed("self_referral");
     }
 
     const {
@@ -265,19 +277,19 @@ export async function claimReferral(req, res) {
     }
 
     if (!profile || !profile.is_active) {
-      return notClaimed();
+      return notClaimed("profile_missing_or_inactive");
     }
 
     // Already invited by someone.
     if (profile.referred_by) {
-      return notClaimed();
+      return notClaimed("already_referred");
     }
 
     // Only brand-new accounts can use a referral.
     const accountAge = Date.now() - new Date(profile.created_at).getTime();
 
     if (!Number.isFinite(accountAge) || accountAge > NEW_USER_WINDOW_MS) {
-      return notClaimed();
+      return notClaimed("account_too_old");
     }
 
     const {
@@ -299,7 +311,7 @@ export async function claimReferral(req, res) {
     }
 
     if (!referrer || !referrer.is_active || referrer.id === profile.id) {
-      return notClaimed();
+      return notClaimed("referrer_not_found");
     }
 
     const {
@@ -314,7 +326,7 @@ export async function claimReferral(req, res) {
 
     if (claimError) {
       if (String(claimError.message || "").includes("already claimed")) {
-        return notClaimed();
+        return notClaimed("already_claimed");
       }
 
       console.error("Claim referral RPC error:", claimError);
@@ -324,6 +336,11 @@ export async function claimReferral(req, res) {
         message: "Could not apply the invitation",
       });
     }
+
+    console.log("REFERRAL CLAIMED:", {
+      referrer: referrer.id,
+      referred: profile.id,
+    });
 
     return res.json({
       success: true,
