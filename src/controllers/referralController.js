@@ -127,11 +127,9 @@ export async function getReferralInfo(req, res) {
     if (rowsError) {
       console.error("Referral list error:", rowsError);
 
-      // TEMPORARY DIAGNOSTIC: shows the real database reason on the card.
-      // Remove the part in brackets once the problem is fixed.
       return res.status(500).json({
         success: false,
-        message: `Could not load your referrals [${rowsError.code || "error"}: ${rowsError.message}]`,
+        message: "Could not load your referrals",
       });
     }
 
@@ -225,10 +223,13 @@ export async function claimReferral(req, res) {
       });
     }
 
-    // Every "not claimed" outcome is logged with its reason so it is
+    // Unusual "not claimed" outcomes are logged with their reason so it is
     // easy to see in the backend logs why a bonus was not paid.
     const notClaimed = (reason) => {
-      console.log("REFERRAL NOT CLAIMED:", reason);
+      // Most app opens have no invite code, so that case is not logged.
+      if (reason !== "no_valid_start_param") {
+        console.log("REFERRAL NOT CLAIMED:", reason);
+      }
 
       return res.json({
         success: true,
@@ -238,11 +239,6 @@ export async function claimReferral(req, res) {
     };
 
     const startParam = String(data.startParam ?? data.start_param ?? "");
-
-    console.log("CLAIM REFERRAL REQUEST:", {
-      telegramId: String(data.user.id),
-      startParam,
-    });
 
     const match = /^ref_(\d{3,20})$/.exec(startParam);
 
