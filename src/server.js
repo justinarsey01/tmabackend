@@ -9,7 +9,7 @@ import serviceRoutes from "./routes/services.js";
 import orderRoutes from "./routes/orders.js";
 import adminRoutes from "./routes/admin.js";
 import carouselRoutes from "./routes/carousel.js";
-
+import referralRoutes from "./routes/referrals.js";
 dotenv.config();
 
 
@@ -24,7 +24,7 @@ app.use(
 );
 
 app.use(express.json());
-
+app.use("/api/referrals", referralRoutes);
 app.get("/", (req, res) => {
   res.json({
     success: true,
@@ -51,7 +51,7 @@ app.use(
 
 app.use("/api/carousel",
    carouselRoutes);
-   
+
 app.use(
   "/api/tasks",
   taskRoutes
