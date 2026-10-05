@@ -16,8 +16,8 @@ const supabase = createClient(
 */
 
 // Coins paid when a friend joins through someone's link.
-const REFERRER_BONUS = Number(process.env.REFERRER_BONUS || 500);
-const REFERRED_BONUS = Number(process.env.REFERRED_BONUS || 250);
+const REFERRER_BONUS = Number(process.env.REFERRER_BONUS || 5000);
+const REFERRED_BONUS = Number(process.env.REFERRED_BONUS || 1000);
 
 // Only accounts created within this time can claim a referral.
 const NEW_USER_WINDOW_MS =
@@ -102,7 +102,7 @@ export async function getReferralInfo(req, res) {
     if (!profile) {
       return res.status(404).json({
         success: false,
-        message: "CoinEarn profile not found",
+        message: "ChannelFix profile not found",
       });
     }
 
