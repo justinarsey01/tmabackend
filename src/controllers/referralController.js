@@ -23,7 +23,7 @@ const REFERRED_BONUS = Number(process.env.REFERRED_BONUS || 1000);
 const NEW_USER_WINDOW_MS =
   Number(process.env.REFERRAL_WINDOW_MINUTES || 60) * 60 * 1000;
 
-const BOT_USERNAME = (process.env.BOT_USERNAME || "coinearn90_bot")
+const BOT_USERNAME = (process.env.BOT_USERNAME || "channel_fixbot")
   .trim()
   .replace(/^@/, "");
 
