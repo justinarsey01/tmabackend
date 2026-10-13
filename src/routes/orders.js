@@ -1,29 +1,18 @@
 import express from "express";
-
+import { telegramAuth } from "../middleware/telegramAuth.js";
+import { createSmmOrder } from "../controllers/orderController.js";
 import {
-  telegramAuth,
-} from "../middleware/telegramAuth.js";
+  createCryptoSmmOrder,
+  getCryptoWalletBalances,
+} from "../controllers/cryptoOrderController.js";
 
-import {
-  createSmmOrder,
-} from "../controllers/orderController.js";
+const router = express.Router();
 
+// Crypto wallet balances and crypto-funded SMM orders.
+router.get("/crypto/wallet", telegramAuth, getCryptoWalletBalances);
+router.post("/crypto", telegramAuth, createCryptoSmmOrder);
 
-const router =
-  express.Router();
-
-
-/*
-|--------------------------------------------------------------------------
-| CREATE SMM ORDER
-|--------------------------------------------------------------------------
-*/
-
-router.post(
-  "/",
-  telegramAuth,
-  createSmmOrder
-);
-
+// Existing Coin-funded checkout remains unchanged.
+router.post("/", telegramAuth, createSmmOrder);
 
 export default router;

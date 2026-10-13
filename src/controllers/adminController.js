@@ -1,4 +1,4 @@
-import dotenv from "dotenv";
+﻿import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
@@ -585,6 +585,7 @@ export async function getAdminServices(req, res) {
         selling_price,
         min_quantity,
         max_quantity,
+        crypto_price_usd,
         active,
         created_at
       `)
@@ -640,6 +641,7 @@ export async function createService(req, res) {
       selling_price,
       min_quantity,
       max_quantity,
+      crypto_price_usd,
       active,
     } = req.body;
 
@@ -674,6 +676,22 @@ export async function createService(req, res) {
       typeof active === "boolean"
         ? active
         : true;
+        const cryptoPriceUsd =
+  crypto_price_usd === undefined ||
+  crypto_price_usd === null ||
+  crypto_price_usd === ""
+    ? null
+    : Number(crypto_price_usd);
+
+    if (
+  cryptoPriceUsd !== null &&
+  (!Number.isFinite(cryptoPriceUsd) || cryptoPriceUsd <= 0)
+) {
+  return res.status(400).json({
+    success: false,
+    message: "Crypto price must be greater than 0, or left empty",
+  });
+}
 
     /*
     |--------------------------------------------------------------------------
@@ -788,6 +806,7 @@ export async function createService(req, res) {
         min_quantity: minQuantity,
         max_quantity: maxQuantity,
         active: serviceActive,
+        crypto_price_usd: cryptoPriceUsd,
       })
       .select(`
         id,
@@ -798,8 +817,10 @@ export async function createService(req, res) {
         selling_price,
         min_quantity,
         max_quantity,
-        active,
+        active, 
+        crypto_price_usd,
         created_at
+       
       `)
       .single();
 
@@ -864,6 +885,7 @@ export async function updateService(req, res) {
       selling_price,
       min_quantity,
       max_quantity,
+      crypto_price_usd,
       active,
     } = req.body;
 
@@ -1207,8 +1229,6 @@ export async function updateService(req, res) {
     });
   }
 }
-
-
 /*
 |--------------------------------------------------------------------------
 | GET ADMIN ORDERS
@@ -1913,3 +1933,4 @@ export async function deleteTask(req, res) {
     });
   }
 }
+
