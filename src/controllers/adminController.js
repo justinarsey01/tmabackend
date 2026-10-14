@@ -1077,6 +1077,35 @@ export async function updateService(req, res) {
 
     /*
     |--------------------------------------------------------------------------
+    | CRYPTO PRICE (USD per 1,000 units; null/empty = auto from coin price)
+    |--------------------------------------------------------------------------
+    */
+
+    if (crypto_price_usd !== undefined) {
+      const cryptoPriceUsd =
+        crypto_price_usd === null ||
+        crypto_price_usd === ""
+          ? null
+          : Number(crypto_price_usd);
+
+      if (
+        cryptoPriceUsd !== null &&
+        (!Number.isFinite(cryptoPriceUsd) ||
+          cryptoPriceUsd <= 0)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Crypto price must be greater than 0, or left empty",
+        });
+      }
+
+      updateData.crypto_price_usd =
+        cryptoPriceUsd;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | GET EXISTING SERVICE
     |--------------------------------------------------------------------------
     */
@@ -1191,6 +1220,7 @@ export async function updateService(req, res) {
         selling_price,
         min_quantity,
         max_quantity,
+        crypto_price_usd,
         active,
         created_at
       `)
