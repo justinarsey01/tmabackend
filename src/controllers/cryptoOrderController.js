@@ -8,6 +8,11 @@ const supabase = createClient(
   { auth: { persistSession: false, autoRefreshToken: false } }
 );
 
+// Fixed conversion rate: 10,000 Coins = 1 USDT (1 Coin = $0.0001).
+const COINS_PER_USDT = Number(process.env.COINS_PER_USDT) > 0
+  ? Number(process.env.COINS_PER_USDT)
+  : 10000;
+
 const ASSET_KEYS = {
   "USDT-BSC": "usdtbsc_balance",
   "USDT-TRC20": "usdttrc20_balance",
@@ -126,7 +131,7 @@ export async function createCryptoSmmOrder(req, res) {
 
     const { data: service, error: serviceError } = await supabase
       .from("smm_services")
-      .select("id, active, min_quantity, max_quantity, crypto_price_usd")
+      .select("id, active, min_quantity, max_quantity, selling_price, crypto_price_usd")
       .eq("id", serviceId)
       .maybeSingle();
     if (serviceError) throw serviceError;
@@ -136,13 +141,24 @@ export async function createCryptoSmmOrder(req, res) {
     if (quantity < Number(service.min_quantity) || quantity > Number(service.max_quantity)) {
       return res.status(400).json({ success: false, message: `Quantity must be between ${service.min_quantity} and ${service.max_quantity}.` });
     }
-    const pricePerThousand = Number(service.crypto_price_usd);
-    if (!Number.isFinite(pricePerThousand) || pricePerThousand <= 0) {
-      return res.status(400).json({ success: false, message: "Crypto pricing is not configured for this service yet." });
-    }
-
     // Server calculates the USD price; never trust a client-supplied amount.
-    const expectedUsdAmount = Number(((quantity * pricePerThousand) / 1000).toFixed(4));
+    // Default: same coin price as Coin checkout, converted at COINS_PER_USDT.
+    // An admin-set crypto_price_usd (USD per 1,000 units) overrides the default.
+    let expectedUsdAmount;
+    const overridePrice = Number(service.crypto_price_usd);
+    if (service.crypto_price_usd != null && Number.isFinite(overridePrice) && overridePrice > 0) {
+      expectedUsdAmount = Number(((quantity * overridePrice) / 1000).toFixed(4));
+    } else {
+      const sellingPrice = Number(service.selling_price);
+      if (!Number.isFinite(sellingPrice) || sellingPrice <= 0) {
+        return res.status(400).json({ success: false, message: "Pricing is not configured for this service yet." });
+      }
+      const coinCost = Math.ceil((quantity * sellingPrice) / 1000);
+      expectedUsdAmount = Number((coinCost / COINS_PER_USDT).toFixed(4));
+    }
+    if (!(expectedUsdAmount > 0)) {
+      return res.status(400).json({ success: false, message: "Order amount is too small." });
+    }
     let cryptoAmount;
     if (asset === "BTC") {
       const priceResponse = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd", {
