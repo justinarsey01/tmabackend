@@ -27,13 +27,15 @@ async function getActiveProfileFromRequest(req) {
     error.status = 401;
     throw error;
   }
-  if (!process.env.BOT_TOKEN) {
-    throw new Error("BOT_TOKEN is not configured on the backend.");
+  // telegramAuth middleware already validated the signature with TELEGRAM_BOT_TOKEN.
+  // Here we only need to read the user id from the init data.
+  if (!process.env.TELEGRAM_BOT_TOKEN) {
+    throw new Error("TELEGRAM_BOT_TOKEN is not configured on the backend.");
   }
 
   let parsed;
   try {
-    parsed = parse(initData, process.env.BOT_TOKEN);
+    parsed = parse(initData);
   } catch {
     const error = new Error("Telegram authentication data is invalid or expired.");
     error.status = 401;
@@ -169,7 +171,8 @@ export async function createCryptoSmmOrder(req, res) {
     });
     if (rpcError) {
       const message = rpcError.message || "Could not create crypto order.";
-      const status = /insufficient/i.test(message) ? 400 : /not found|inactive|quantity|price/i.test(message) ? 400 : 500;
+      const status = /insufficient|not found|inactive|quantity|price/i.test(message) ? 400 : 500;
+      console.error("create_crypto_smm_order RPC error:", rpcError);
       return res.status(status).json({ success: false, message });
     }
 

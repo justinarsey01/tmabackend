@@ -37,13 +37,13 @@ function extractChannelUsername(target) {
 async function isChannelMember(target, telegramUserId) {
   const username = extractChannelUsername(target);
 
-  if (!username || !process.env.BOT_TOKEN) {
+  if (!username || !process.env.TELEGRAM_BOT_TOKEN) {
     return null;
   }
 
   try {
     const url =
-      `https://api.telegram.org/bot${process.env.BOT_TOKEN}/getChatMember` +
+      `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/getChatMember` +
       `?chat_id=${encodeURIComponent("@" + username)}` +
       `&user_id=${encodeURIComponent(telegramUserId)}`;
 
