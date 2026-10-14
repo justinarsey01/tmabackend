@@ -18,6 +18,7 @@ import {
   getAdminServices,
   createService,
   updateService,
+  deleteService,
 
   getAdminOrders,
   updateAdminOrderStatus,
@@ -112,6 +113,11 @@ router.post(
 router.patch(
   "/services/:id",
   updateService
+);
+
+router.delete(
+  "/services/:id",
+  deleteService
 );
 
 

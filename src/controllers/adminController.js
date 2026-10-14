@@ -1934,3 +1934,82 @@ export async function deleteTask(req, res) {
   }
 }
 
+
+/*
+|--------------------------------------------------------------------------
+| DELETE SMM SERVICE
+|--------------------------------------------------------------------------
+| A service that already has orders cannot be deleted, because the orders
+| keep a reference to it. In that case the admin should deactivate it.
+*/
+
+export async function deleteService(req, res) {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Service ID is required",
+      });
+    }
+
+    const { data: service, error: findError } = await supabase
+      .from("smm_services")
+      .select("id, name")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (findError) throw findError;
+
+    if (!service) {
+      return res.status(404).json({
+        success: false,
+        message: "Service not found",
+      });
+    }
+
+    const { count: orderCount, error: countError } = await supabase
+      .from("smm_orders")
+      .select("id", { count: "exact", head: true })
+      .eq("service_id", id);
+
+    if (countError) throw countError;
+
+    if (orderCount > 0) {
+      return res.status(409).json({
+        success: false,
+        message: `"${service.name}" has ${orderCount} order(s), so it cannot be deleted. Deactivate it instead to hide it from users.`,
+      });
+    }
+
+    const { error: deleteError } = await supabase
+      .from("smm_services")
+      .delete()
+      .eq("id", id);
+
+    if (deleteError) {
+      // 23503 = foreign key violation (something else still references it)
+      if (deleteError.code === "23503") {
+        return res.status(409).json({
+          success: false,
+          message:
+            "This service is still referenced by other records, so it cannot be deleted. Deactivate it instead.",
+        });
+      }
+      throw deleteError;
+    }
+
+    return res.json({
+      success: true,
+      message: "Service deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete service error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Server error while deleting service",
+    });
+  }
+}
