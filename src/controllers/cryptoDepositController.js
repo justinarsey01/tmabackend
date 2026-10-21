@@ -17,7 +17,7 @@ const NOWPAYMENTS_API_URL = (
 ).replace(/\/+$/, "");
 
 const MIN_DEPOSIT_USD =
-  Number(process.env.MIN_DEPOSIT_USD) > 0 ? Number(process.env.MIN_DEPOSIT_USD) : 5;
+  Number(process.env.MIN_DEPOSIT_USD) > 0 ? Number(process.env.MIN_DEPOSIT_USD) : 0.001;
 const MAX_DEPOSIT_USD =
   Number(process.env.MAX_DEPOSIT_USD) > 0 ? Number(process.env.MAX_DEPOSIT_USD) : 5000;
 
