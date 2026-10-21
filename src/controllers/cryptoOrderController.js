@@ -25,7 +25,7 @@ function getInitData(req) {
   return authorization.slice(4).trim();
 }
 
-async function getActiveProfileFromRequest(req) {
+export async function getActiveProfileFromRequest(req) {
   const initData = getInitData(req);
   if (!initData) {
     const error = new Error("Telegram authentication data is missing.");
@@ -89,6 +89,26 @@ async function ensureWallet(userId) {
   return data;
 }
 
+// Turns common database setup problems into a clear, actionable message.
+function describeDbError(error) {
+  const code = String(error?.code || "");
+  const text = String(error?.message || "");
+
+  if (code === "42P01" || code === "PGRST205" || /could not find the table|does not exist/i.test(text) && /relation|table/i.test(text)) {
+    return "The crypto_wallets table is missing in the database. Run the crypto_wallets.sql setup in Supabase.";
+  }
+  if (code === "42703" || code === "PGRST204" || /column .* does not exist|could not find the .* column/i.test(text)) {
+    return `A database column is missing or misnamed: ${text}`;
+  }
+  if (code === "42501" || /permission denied|row-level security/i.test(text)) {
+    return "The database refused access. Check that SUPABASE_SERVICE_ROLE_KEY is the service-role key.";
+  }
+  if (/invalid api key|jwt/i.test(text)) {
+    return "Supabase rejected the backend key. Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.";
+  }
+  return null;
+}
+
 function toWalletResponse(wallet) {
   return {
     USDTBSC: Number(wallet?.usdtbsc_balance ?? 0),
@@ -106,7 +126,9 @@ export async function getCryptoWalletBalances(req, res) {
     console.error("getCryptoWalletBalances:", error);
     return res.status(error.status || 500).json({
       success: false,
-      message: error.status ? error.message : "Could not load crypto wallet balances.",
+      message: error.status
+        ? error.message
+        : describeDbError(error) || "Could not load crypto wallet balances.",
     });
   }
 }
