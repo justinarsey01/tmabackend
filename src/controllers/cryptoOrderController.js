@@ -90,12 +90,12 @@ async function ensureWallet(userId) {
 }
 
 // Turns common database setup problems into a clear, actionable message.
-function describeDbError(error) {
+export function describeDbError(error) {
   const code = String(error?.code || "");
   const text = String(error?.message || "");
 
   if (code === "42P01" || code === "PGRST205" || /could not find the table|does not exist/i.test(text) && /relation|table/i.test(text)) {
-    return "The crypto_wallets table is missing in the database. Run the crypto_wallets.sql setup in Supabase.";
+    return "A required database table is missing. Run crypto_wallets.sql and then nowpayments_deposits.sql in the Supabase SQL editor.";
   }
   if (code === "42703" || code === "PGRST204" || /column .* does not exist|could not find the .* column/i.test(text)) {
     return `A database column is missing or misnamed: ${text}`;

@@ -1,7 +1,10 @@
 import "dotenv/config";
 import crypto from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
-import { getActiveProfileFromRequest } from "./cryptoOrderController.js";
+import {
+  getActiveProfileFromRequest,
+  describeDbError,
+} from "./cryptoOrderController.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -203,7 +206,9 @@ export async function createCryptoDeposit(req, res) {
     console.error("createCryptoDeposit:", error);
     return res.status(error.status || 500).json({
       success: false,
-      message: error.status ? error.message : "Could not start the deposit.",
+      message: error.status
+        ? error.message
+        : describeDbError(error) || "Could not start the deposit.",
     });
   }
 }
@@ -241,7 +246,9 @@ export async function listCryptoDeposits(req, res) {
     console.error("listCryptoDeposits:", error);
     return res.status(error.status || 500).json({
       success: false,
-      message: error.status ? error.message : "Could not load deposits.",
+      message: error.status
+        ? error.message
+        : describeDbError(error) || "Could not load deposits.",
     });
   }
 }
