@@ -86,9 +86,13 @@ export async function getTransactionHistory(req, res) {
         id: `order:${order.id}`,
         kind: isCrypto ? "crypto_order" : "coin_order",
         title: service?.name || "SMM order",
-        subtitle: `Qty ${Number(order.quantity || 0).toLocaleString("en-US")}${
-          target ? ` · ${target}` : ""
-        }`,
+        subtitle: target.startsWith("SOURCE:")
+          ? `${Number(order.quantity || 0)} target channel${
+              Number(order.quantity || 0) === 1 ? "" : "s"
+            }`
+          : `Qty ${Number(order.quantity || 0).toLocaleString("en-US")}${
+              target ? ` · ${target}` : ""
+            }`,
         amount: isCrypto ? Number(order.crypto_amount) : Number(order.amount),
         currency: isCrypto ? order.crypto_asset : "COINS",
         amountUsd:

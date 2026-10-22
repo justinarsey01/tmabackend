@@ -10,8 +10,6 @@ const supabase = createClient(
 
 const ASSET_KEYS = {
   "USDT-BSC": "usdtbsc_balance",
-  "USDT-TRC20": "usdttrc20_balance",
-  BTC: "btc_balance",
 };
 
 function getInitData(req) {

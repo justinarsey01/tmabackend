@@ -17,9 +17,7 @@ const supabase = createClient(
 
 export async function getServices(req, res) {
   try {
-    const { data, error } = await supabase
-      .from("smm_services")
-      .select(`
+    const BASE_COLUMNS = `
         id,
         name,
         category,
@@ -29,11 +27,29 @@ export async function getServices(req, res) {
         min_quantity,
         max_quantity,
         active
-      `)
-      .eq("active", true)
-      .order("created_at", {
-        ascending: true,
-      });
+      `;
+    const COPY_COLUMNS = `,
+        service_type,
+        max_targets,
+        tier_prices,
+        tier_prices_usd
+      `;
+
+    const queryServices = (columns) =>
+      supabase
+        .from("smm_services")
+        .select(columns)
+        .eq("active", true)
+        .order("created_at", {
+          ascending: true,
+        });
+
+    let { data, error } = await queryServices(BASE_COLUMNS + COPY_COLUMNS);
+
+    // Database not updated yet (42703 = unknown column): fall back to the old fields.
+    if (error && error.code === "42703") {
+      ({ data, error } = await queryServices(BASE_COLUMNS));
+    }
 
     if (error) {
       console.error("Get services error:", error);
@@ -73,6 +89,23 @@ export async function getServices(req, res) {
       ),
 
       active: service.active,
+
+      serviceType: service.service_type || "standard",
+
+      maxTargets:
+        service.max_targets == null
+          ? null
+          : Number(service.max_targets),
+
+      // Coin price for 1, 2, 3 ... target channels
+      tierPrices: Array.isArray(service.tier_prices)
+        ? service.tier_prices.map(Number)
+        : null,
+
+      // USDT price for 1, 2, 3 ... target channels
+      tierPricesUsd: Array.isArray(service.tier_prices_usd)
+        ? service.tier_prices_usd.map(Number)
+        : null,
     }));
 
     return res.json({

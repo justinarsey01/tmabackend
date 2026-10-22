@@ -24,8 +24,6 @@ const MAX_DEPOSIT_USD =
 // App asset -> NOWPayments currency code
 const PAY_CURRENCY = {
   "USDT-BSC": "usdtbsc",
-  "USDT-TRC20": "usdttrc20",
-  BTC: "btc",
 };
 
 function isConfigured() {
@@ -114,7 +112,7 @@ export async function createCryptoDeposit(req, res) {
     }
 
     const profile = await getActiveProfileFromRequest(req);
-    const { asset } = req.body || {};
+    const asset = req.body?.asset || "USDT-BSC";
     const amountUsd = Math.round(Number(req.body?.amountUsd) * 100) / 100;
 
     if (!PAY_CURRENCY[asset]) {

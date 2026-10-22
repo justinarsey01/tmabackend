@@ -569,14 +569,119 @@ export async function updateUserStatus(req, res) {
 |--------------------------------------------------------------------------
 */
 
+/*
+|--------------------------------------------------------------------------
+| CHANNEL COPY SERVICE FIELDS (shared by create + update)
+|--------------------------------------------------------------------------
+| service_type: "standard" (priced per 1,000 units) or "channel_copy"
+| (one source channel, 1..max_targets target channels, price by number of targets).
+| tier_prices[i]     = coin price for i+1 targets
+| tier_prices_usd[i] = USDT price for i+1 targets (optional)
+*/
+
+function parseCopyServiceFields(body) {
+  if (body.service_type === undefined) {
+    return { fields: null };
+  }
+
+  if (body.service_type !== "channel_copy") {
+    return {
+      fields: {
+        service_type: "standard",
+        max_targets: null,
+        tier_prices: null,
+        tier_prices_usd: null,
+      },
+    };
+  }
+
+  const maxTargets = Number(body.max_targets);
+
+  if (
+    !Number.isInteger(maxTargets) ||
+    maxTargets < 1 ||
+    maxTargets > 10
+  ) {
+    return {
+      error:
+        "Maximum target channels must be a whole number from 1 to 10",
+    };
+  }
+
+  if (
+    !Array.isArray(body.tier_prices) ||
+    body.tier_prices.length !== maxTargets
+  ) {
+    return {
+      error: `Enter a coin price for each number of target channels (1 to ${maxTargets})`,
+    };
+  }
+
+  const tierPrices = body.tier_prices.map(Number);
+
+  if (
+    tierPrices.some(
+      (value) =>
+        !Number.isInteger(value) || value <= 0
+    )
+  ) {
+    return {
+      error:
+        "Coin prices must be whole numbers greater than 0",
+    };
+  }
+
+  let tierPricesUsd = null;
+
+  const hasUsd =
+    Array.isArray(body.tier_prices_usd) &&
+    body.tier_prices_usd.some(
+      (value) =>
+        value !== "" &&
+        value !== null &&
+        value !== undefined
+    );
+
+  if (hasUsd) {
+    if (body.tier_prices_usd.length !== maxTargets) {
+      return {
+        error: `Enter a USDT price for each number of target channels (1 to ${maxTargets}), or leave all blank`,
+      };
+    }
+
+    tierPricesUsd = body.tier_prices_usd.map(Number);
+
+    if (
+      tierPricesUsd.some(
+        (value) =>
+          !Number.isFinite(value) || value <= 0
+      )
+    ) {
+      return {
+        error:
+          "USDT prices must be greater than 0. Fill all of them or leave all blank",
+      };
+    }
+
+    tierPricesUsd = tierPricesUsd.map((value) =>
+      Number(value.toFixed(4))
+    );
+  }
+
+  return {
+    fields: {
+      service_type: "channel_copy",
+      max_targets: maxTargets,
+      tier_prices: tierPrices,
+      tier_prices_usd: tierPricesUsd,
+    },
+  };
+}
+
+
 export async function getAdminServices(req, res) {
   try {
-    const {
-      data: services,
-      error,
-    } = await supabase
-      .from("smm_services")
-      .select(`
+    const BASE_COLUMNS = `
         id,
         name,
         category,
@@ -588,10 +693,30 @@ export async function getAdminServices(req, res) {
         crypto_price_usd,
         active,
         created_at
-      `)
-      .order("created_at", {
-        ascending: true,
-      });
+      `;
+    const COPY_COLUMNS = `,
+        service_type,
+        max_targets,
+        tier_prices,
+        tier_prices_usd
+      `;
+
+    const queryServices = (columns) =>
+      supabase
+        .from("smm_services")
+        .select(columns)
+        .order("created_at", {
+          ascending: true,
+        });
+
+    let { data: services, error } =
+      await queryServices(BASE_COLUMNS + COPY_COLUMNS);
+
+    // Database not updated yet (42703 = unknown column): fall back to the old fields.
+    if (error && error.code === "42703") {
+      ({ data: services, error } =
+        await queryServices(BASE_COLUMNS));
+    }
 
     if (error) {
       console.error(
@@ -785,6 +910,15 @@ export async function createService(req, res) {
       });
     }
 
+    const copyParsed = parseCopyServiceFields(req.body);
+
+    if (copyParsed.error) {
+      return res.status(400).json({
+        success: false,
+        message: copyParsed.error,
+      });
+    }
+
     /*
     |--------------------------------------------------------------------------
     | CREATE SERVICE
@@ -807,6 +941,11 @@ export async function createService(req, res) {
         max_quantity: maxQuantity,
         active: serviceActive,
         crypto_price_usd: cryptoPriceUsd,
+        // Only send the new fields for channel copy services, so standard
+        // services still save even before the database script is run.
+        ...(copyParsed.fields?.service_type === "channel_copy"
+          ? copyParsed.fields
+          : {}),
       })
       .select(`
         id,
@@ -819,6 +958,10 @@ export async function createService(req, res) {
         max_quantity,
         active, 
         crypto_price_usd,
+        service_type,
+        max_targets,
+        tier_prices,
+        tier_prices_usd,
         created_at
        
       `)
@@ -1106,6 +1249,25 @@ export async function updateService(req, res) {
 
     /*
     |--------------------------------------------------------------------------
+    | CHANNEL COPY FIELDS
+    |--------------------------------------------------------------------------
+    */
+
+    const copyParsed = parseCopyServiceFields(req.body);
+
+    if (copyParsed.error) {
+      return res.status(400).json({
+        success: false,
+        message: copyParsed.error,
+      });
+    }
+
+    if (copyParsed.fields) {
+      Object.assign(updateData, copyParsed.fields);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | GET EXISTING SERVICE
     |--------------------------------------------------------------------------
     */
@@ -1221,6 +1383,10 @@ export async function updateService(req, res) {
         min_quantity,
         max_quantity,
         crypto_price_usd,
+        service_type,
+        max_targets,
+        tier_prices,
+        tier_prices_usd,
         active,
         created_at
       `)

@@ -11,6 +11,7 @@ import {
   nowPaymentsIpn,
 } from "../controllers/cryptoDepositController.js";
 import { getTransactionHistory } from "../controllers/historyController.js";
+import { createChannelCopyOrder } from "../controllers/copyOrderController.js";
 
 const router = express.Router();
 
@@ -26,6 +27,9 @@ router.post("/crypto/ipn", nowPaymentsIpn);
 
 // Combined history of coin orders, crypto orders and crypto deposits.
 router.get("/history", telegramAuth, getTransactionHistory);
+
+// Channel copy service (source channel -> up to N target channels).
+router.post("/copy", telegramAuth, createChannelCopyOrder);
 
 // Existing Coin-funded checkout remains unchanged.
 router.post("/", telegramAuth, createSmmOrder);
