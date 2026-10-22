@@ -10,6 +10,7 @@ import {
   listCryptoDeposits,
   nowPaymentsIpn,
 } from "../controllers/cryptoDepositController.js";
+import { getTransactionHistory } from "../controllers/historyController.js";
 
 const router = express.Router();
 
@@ -22,6 +23,9 @@ router.post("/crypto/deposit", telegramAuth, createCryptoDeposit);
 router.get("/crypto/deposits", telegramAuth, listCryptoDeposits);
 // Public webhook called by NOWPayments (verified by HMAC signature, not Telegram auth).
 router.post("/crypto/ipn", nowPaymentsIpn);
+
+// Combined history of coin orders, crypto orders and crypto deposits.
+router.get("/history", telegramAuth, getTransactionHistory);
 
 // Existing Coin-funded checkout remains unchanged.
 router.post("/", telegramAuth, createSmmOrder);
