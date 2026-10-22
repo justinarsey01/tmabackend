@@ -1403,12 +1403,43 @@ export async function updateAdminOrderStatus(
       });
     }
 
+    // Crypto-paid orders: put the crypto back in the user's wallet.
+    // The database function refunds each order only once and ignores coin orders.
+    let cryptoRefunded = false;
+
+    if (status === "rejected") {
+      const { data: refunded, error: refundError } =
+        await supabase.rpc("refund_crypto_smm_order", {
+          p_order_id: id,
+        });
+
+      if (refundError) {
+        console.error(
+          "Crypto refund error:",
+          refundError
+        );
+
+        return res.status(500).json({
+          success: false,
+          message:
+            "The order was rejected, but the crypto refund failed: " +
+            (refundError.message ||
+              "unknown error") +
+            ". Run the refund SQL setup and try the refund again.",
+        });
+      }
+
+      cryptoRefunded = refunded === true;
+    }
+
     return res.json({
       success: true,
 
       message:
         status === "rejected"
-          ? "Order rejected and refunded successfully"
+          ? cryptoRefunded
+            ? "Order rejected and the crypto was refunded to the user's wallet"
+            : "Order rejected and refunded successfully"
           : `Order moved to ${status}`,
 
       order: data,

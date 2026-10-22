@@ -17,7 +17,7 @@ const NOWPAYMENTS_API_URL = (
 ).replace(/\/+$/, "");
 
 const MIN_DEPOSIT_USD =
-  Number(process.env.MIN_DEPOSIT_USD) > 0 ? Number(process.env.MIN_DEPOSIT_USD) : 0.001;
+  Number(process.env.MIN_DEPOSIT_USD) > 0 ? Number(process.env.MIN_DEPOSIT_USD) : 5;
 const MAX_DEPOSIT_USD =
   Number(process.env.MAX_DEPOSIT_USD) > 0 ? Number(process.env.MAX_DEPOSIT_USD) : 5000;
 
@@ -226,6 +226,7 @@ export async function listCryptoDeposits(req, res) {
       .from("crypto_deposits")
       .select("order_id, asset, price_usd, status, credited, credited_amount, created_at")
       .eq("user_id", profile.id)
+      .not("status", "in", "(failed,pending,waiting)") // hide unpaid invoices
       .order("created_at", { ascending: false })
       .limit(10);
     if (error) throw error;

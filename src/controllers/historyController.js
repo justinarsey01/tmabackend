@@ -28,7 +28,7 @@ export async function getTransactionHistory(req, res) {
   try {
     const profile = await getActiveProfileFromRequest(req);
 
-    const [ordersResult, depositsResult] = await Promise.all([
+    const [ordersResult, depositsResult, refundsResult] = await Promise.all([
       supabase
         .from("smm_orders")
         .select(`
@@ -53,7 +53,15 @@ export async function getTransactionHistory(req, res) {
         .from("crypto_deposits")
         .select("order_id, asset, price_usd, status, credited, credited_amount, created_at")
         .eq("user_id", profile.id)
-        .neq("status", "failed") // invoices that never got created
+        .not("status", "in", "(failed,pending,waiting)") // hide unpaid invoices
+        .order("created_at", { ascending: false })
+        .limit(50),
+
+      supabase
+        .from("crypto_wallet_transactions")
+        .select("reference, asset, amount, created_at")
+        .eq("user_id", profile.id)
+        .eq("type", "refund")
         .order("created_at", { ascending: false })
         .limit(50),
     ]);
@@ -63,6 +71,10 @@ export async function getTransactionHistory(req, res) {
     // A missing deposits table must not hide the order history.
     if (depositsResult.error) {
       console.error("getTransactionHistory deposits:", depositsResult.error);
+    }
+
+    if (refundsResult.error) {
+      console.error("getTransactionHistory refunds:", refundsResult.error);
     }
 
     const orderItems = (ordersResult.data || []).map((order) => {
@@ -105,7 +117,20 @@ export async function getTransactionHistory(req, res) {
       createdAt: deposit.created_at,
     }));
 
-    const items = [...orderItems, ...depositItems]
+    const refundItems = (refundsResult.data || []).map((refund) => ({
+      id: `refund:${refund.reference}`,
+      kind: "crypto_refund",
+      title: "Refund",
+      subtitle: "Rejected crypto order",
+      amount: Number(refund.amount),
+      currency: refund.asset,
+      amountUsd: null,
+      status: "refunded",
+      credited: true,
+      createdAt: refund.created_at,
+    }));
+
+    const items = [...orderItems, ...depositItems, ...refundItems]
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
       .slice(0, 100);
 
