@@ -50,12 +50,12 @@ export async function getAdminDashboard(req, res) {
     // --------------------------------------------------
 
     const {
-      count: {formatNumber:totalUsers},    
+      count: totalUsers,
       error: usersError,
     } = await supabase
       .from("profiles")
       .select("id", {
-        count: "exact",
+        count: "totalUsers",
         head: true,
       });
 
