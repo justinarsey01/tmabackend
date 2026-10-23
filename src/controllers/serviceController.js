@@ -97,11 +97,6 @@ export async function getServices(req, res) {
           ? null
           : Number(service.max_targets),
 
-      // Coin price for 1, 2, 3 ... target channels
-      tierPrices: Array.isArray(service.tier_prices)
-        ? service.tier_prices.map(Number)
-        : null,
-
       // USDT price for 1, 2, 3 ... target channels
       tierPricesUsd: Array.isArray(service.tier_prices_usd)
         ? service.tier_prices_usd.map(Number)

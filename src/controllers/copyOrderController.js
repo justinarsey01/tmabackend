@@ -51,20 +51,18 @@ function normalizeChannelLink(value) {
 |--------------------------------------------------------------------------
 | POST /api/orders/copy  (Telegram auth)
 | Channel copy service: one source channel, 1..N target channels.
-| Price depends on the number of targets and is read from the service tiers
-| inside the database function; the client never sends a price.
+| Paid with USDT (BSC) only. The price depends on the number of targets and is
+| read from the service's USDT price table inside the database function;
+| the client never sends a price.
 |--------------------------------------------------------------------------
 */
 export async function createChannelCopyOrder(req, res) {
   try {
     const profile = await getActiveProfileFromRequest(req);
-    const { serviceId, source, targets, paymentMethod } = req.body || {};
+    const { serviceId, source, targets } = req.body || {};
 
     if (!serviceId || typeof serviceId !== "string") {
       return res.status(400).json({ success: false, message: "A valid service is required." });
-    }
-    if (paymentMethod !== "coins" && paymentMethod !== "crypto") {
-      return res.status(400).json({ success: false, message: "Choose Coins or USDT as the payment method." });
     }
 
     const sourceLink = normalizeChannelLink(source);
@@ -121,7 +119,6 @@ export async function createChannelCopyOrder(req, res) {
       p_service_id: service.id,
       p_source: sourceLink.display,
       p_targets: targetLinks.map((link) => link.display),
-      p_payment_method: paymentMethod,
     });
 
     if (error) {
@@ -142,8 +139,7 @@ export async function createChannelCopyOrder(req, res) {
       order: {
         id: result.id,
         orderNumber: result.orderNumber ?? result.id,
-        paymentMethod: result.paymentMethod,
-        balance: result.balance == null ? null : Number(result.balance),
+        paymentMethod: "crypto",
         cryptoBalance: result.cryptoBalance == null ? null : Number(result.cryptoBalance),
       },
     });

@@ -608,72 +608,39 @@ function parseCopyServiceFields(body) {
     };
   }
 
+  // Channel copy is paid with USDT only: a price is required for
+  // every number of target channels (1 to maxTargets).
   if (
-    !Array.isArray(body.tier_prices) ||
-    body.tier_prices.length !== maxTargets
+    !Array.isArray(body.tier_prices_usd) ||
+    body.tier_prices_usd.length !== maxTargets
   ) {
     return {
-      error: `Enter a coin price for each number of target channels (1 to ${maxTargets})`,
+      error: `Enter a USDT price for each number of target channels (1 to ${maxTargets})`,
     };
   }
 
-  const tierPrices = body.tier_prices.map(Number);
+  const tierPricesUsd = body.tier_prices_usd.map(Number);
 
   if (
-    tierPrices.some(
+    tierPricesUsd.some(
       (value) =>
-        !Number.isInteger(value) || value <= 0
+        !Number.isFinite(value) || value <= 0
     )
   ) {
     return {
       error:
-        "Coin prices must be whole numbers greater than 0",
+        "Every USDT price must be a number greater than 0",
     };
-  }
-
-  let tierPricesUsd = null;
-
-  const hasUsd =
-    Array.isArray(body.tier_prices_usd) &&
-    body.tier_prices_usd.some(
-      (value) =>
-        value !== "" &&
-        value !== null &&
-        value !== undefined
-    );
-
-  if (hasUsd) {
-    if (body.tier_prices_usd.length !== maxTargets) {
-      return {
-        error: `Enter a USDT price for each number of target channels (1 to ${maxTargets}), or leave all blank`,
-      };
-    }
-
-    tierPricesUsd = body.tier_prices_usd.map(Number);
-
-    if (
-      tierPricesUsd.some(
-        (value) =>
-          !Number.isFinite(value) || value <= 0
-      )
-    ) {
-      return {
-        error:
-          "USDT prices must be greater than 0. Fill all of them or leave all blank",
-      };
-    }
-
-    tierPricesUsd = tierPricesUsd.map((value) =>
-      Number(value.toFixed(4))
-    );
   }
 
   return {
     fields: {
       service_type: "channel_copy",
       max_targets: maxTargets,
-      tier_prices: tierPrices,
-      tier_prices_usd: tierPricesUsd,
+      tier_prices: null,
+      tier_prices_usd: tierPricesUsd.map((value) =>
+        Number(value.toFixed(4))
+      ),
     },
   };
 }
