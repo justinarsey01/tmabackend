@@ -50,7 +50,7 @@ export async function getAdminDashboard(req, res) {
     // --------------------------------------------------
 
     const {
-      count: totalUsers,
+      count: {formatNumber:totalUsers},    
       error: usersError,
     } = await supabase
       .from("profiles")
