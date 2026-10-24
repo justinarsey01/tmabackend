@@ -1,3 +1,4 @@
+import { orderCode } from "../lib/orderCode.js";
 import { notifyNewOrder, notifyOrderStatus, notifyUserById, withTimeout } from "../lib/notify.js";
 import dotenv from "dotenv";
 import { parse } from "@tma.js/init-data-node";
@@ -272,8 +273,8 @@ export async function createSmmOrder(req, res) {
           result.order_id,
 
         orderNumber:
-          Number(
-            result.order_number
+          orderCode(
+            result.order_id
           ),
 
         amount:

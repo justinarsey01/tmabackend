@@ -1,3 +1,4 @@
+import { orderCode } from "../lib/orderCode.js";
 import { notifyNewOrder, notifyOrderStatus, notifyUserById, withTimeout } from "../lib/notify.js";
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
@@ -141,7 +142,7 @@ export async function createChannelCopyOrder(req, res) {
       success: true,
       order: {
         id: result.id,
-        orderNumber: result.orderNumber ?? result.id,
+        orderNumber: orderCode(result.id),
         paymentMethod: "crypto",
         cryptoBalance: result.cryptoBalance == null ? null : Number(result.cryptoBalance),
       },

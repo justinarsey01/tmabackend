@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
+import { orderCode } from "./orderCode.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -69,6 +70,46 @@ export async function sendTelegramMessage(
           text,
           ...(html ? { parse_mode: "HTML" } : {}),
           disable_web_page_preview: true,
+        }),
+        signal: controller.signal,
+      }
+    );
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok || !data.ok) {
+      return {
+        ok: false,
+        error: data.description || `HTTP ${response.status}`,
+      };
+    }
+
+    return { ok: true, messageId: data.result?.message_id ?? null };
+  } catch (error) {
+    return { ok: false, error: error.message || "Network error" };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Deletes a message the bot sent earlier (Telegram allows this for 48 hours).
+export async function deleteTelegramMessage(botToken, chatId, messageId) {
+  if (!botToken || !chatId || !messageId) {
+    return { ok: false, error: "Missing bot token, chat or message id" };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6000);
+
+  try {
+    const response = await fetch(
+      `https://api.telegram.org/bot${botToken}/deleteMessage`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: String(chatId),
+          message_id: Number(messageId),
         }),
         signal: controller.signal,
       }
@@ -215,7 +256,7 @@ async function loadOrderDetails(orderId) {
 }
 
 function formatOrderNumber(order) {
-  return order.order_number ?? String(order.id).slice(0, 8);
+  return orderCode(order.id);
 }
 
 function formatPaid(order) {

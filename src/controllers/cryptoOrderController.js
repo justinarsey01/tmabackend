@@ -1,3 +1,4 @@
+import { orderCode } from "../lib/orderCode.js";
 import { notifyNewOrder, notifyOrderStatus, notifyUserById, withTimeout } from "../lib/notify.js";
 import "dotenv/config";
 import { parse } from "@tma.js/init-data-node";
@@ -216,7 +217,7 @@ export async function createCryptoSmmOrder(req, res) {
       success: true,
       order: {
         id: result.id,
-        orderNumber: result.orderNumber ?? result.order_number ?? result.id,
+        orderNumber: orderCode(result.id),
         amount: Number(result.usdAmount ?? result.usd_amount ?? expectedUsdAmount),
         cryptoAmount: Number(result.cryptoAmount ?? result.crypto_amount ?? cryptoAmount),
         asset,

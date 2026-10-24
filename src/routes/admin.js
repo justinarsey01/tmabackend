@@ -24,7 +24,11 @@ import {
   getAdminOrders,
   updateAdminOrderStatus,
 } from "../controllers/adminController.js";
-import { sendUserNotification } from "../controllers/notificationController.js";
+import {
+  sendUserNotification,
+  listSentNotifications,
+  deleteSentNotification,
+} from "../controllers/notificationController.js";
 
 import {
   getAdminTasks,
@@ -126,6 +130,17 @@ router.delete(
 router.post(
   "/notifications/send",
   sendUserNotification
+);
+
+// Notifications that were sent from the admin page, and deleting them.
+router.get(
+  "/notifications",
+  listSentNotifications
+);
+
+router.delete(
+  "/notifications/:id",
+  deleteSentNotification
 );
 
 // Balance (coins + USDT) and history of one user.

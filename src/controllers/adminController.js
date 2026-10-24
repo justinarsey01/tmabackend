@@ -1,5 +1,18 @@
 ﻿import { notifyNewOrder, notifyOrderStatus, notifyUserById, withTimeout } from "../lib/notify.js";
 import { buildHistoryForUser } from "./historyController.js";
+import { orderCode } from "../lib/orderCode.js";
+import { getUsdtSpent } from "../lib/usdtStats.js";
+
+// Adds the public, non-sequential order code to an order (or a list of orders).
+function addOrderCode(row) {
+  if (Array.isArray(row)) return row.map(addOrderCode);
+
+  if (row && typeof row === "object" && row.id) {
+    return { ...row, order_code: orderCode(row.id) };
+  }
+
+  return row;
+}
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 
@@ -303,7 +316,17 @@ export async function getAdminDashboard(req, res) {
     // DASHBOARD RESPONSE
     // --------------------------------------------------
 
+    // Total USDT users have spent on crypto-paid orders (rejected ones excluded).
+    let usdtSpent = 0;
+
+    try {
+      usdtSpent = (await getUsdtSpent()).total;
+    } catch (spentError) {
+      console.error("Dashboard USDT spent error:", spentError);
+    }
+
     const stats = {
+      usdtSpent: Number(usdtSpent.toFixed(4)),
       totalUsers: totalUsers || 0,
       activeUsers: activeUsers || 0,
 
@@ -332,7 +355,7 @@ export async function getAdminDashboard(req, res) {
 
       stats,
 
-      recentOrders: recentOrders || [],
+      recentOrders: addOrderCode(recentOrders || []),
     });
   } catch (error) {
     console.error(
@@ -397,9 +420,23 @@ export async function getAdminUsers(req, res) {
       });
     }
 
+    // USDT each user has spent on crypto-paid orders.
+    let spentByUser = new Map();
+
+    try {
+      spentByUser = (await getUsdtSpent()).byUser;
+    } catch (spentError) {
+      console.error("Users USDT spent error:", spentError);
+    }
+
     return res.status(200).json({
       success: true,
-      users: users || [],
+      users: (users || []).map((user) => ({
+        ...user,
+        usdt_spent: Number(
+          (spentByUser.get(user.id) || 0).toFixed(4)
+        ),
+      })),
       total: users?.length || 0,
     });
   } catch (error) {
@@ -1427,7 +1464,7 @@ export async function getAdminOrders(req, res) {
 
     return res.json({
       success: true,
-      orders: orders || [],
+      orders: addOrderCode(orders || []),
     });
   } catch (error) {
     console.error(
@@ -1582,7 +1619,7 @@ export async function updateAdminOrderStatus(
             : "Order rejected and refunded successfully"
           : `Order moved to ${status}`,
 
-      order: data,
+      order: addOrderCode(data),
     });
   } catch (error) {
     console.error(
@@ -2279,6 +2316,13 @@ export async function getAdminUserDetails(req, res) {
       usdt: {
         balance: Number(wallet?.usdtbsc_balance ?? 0),
         totalDeposited,
+        totalSpent: Number(
+          (
+            await getUsdtSpent({ userId: id }).catch(() => ({
+              total: 0,
+            }))
+          ).total.toFixed(4)
+        ),
       },
       history,
     });
