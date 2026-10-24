@@ -2,6 +2,7 @@
 import { buildHistoryForUser } from "./historyController.js";
 import { orderCode } from "../lib/orderCode.js";
 import { getUsdtSpent } from "../lib/usdtStats.js";
+import { getExtraDashboardStats } from "../lib/dashboardStats.js";
 
 // Adds the public, non-sequential order code to an order (or a list of orders).
 function addOrderCode(row) {
@@ -216,6 +217,8 @@ export async function getAdminDashboard(req, res) {
         admin_note,
         created_at,
         updated_at,
+        payment_method,
+        crypto_amount_usd,
         profiles:user_id (
           username,
           first_name,
@@ -325,7 +328,28 @@ export async function getAdminDashboard(req, res) {
       console.error("Dashboard USDT spent error:", spentError);
     }
 
+    // Extra figures: new users, coins, USDT wallets and deposits, orders today.
+    const extra = await getExtraDashboardStats().catch((extraError) => {
+      console.error("Dashboard extra figures error:", extraError);
+      return {};
+    });
+
+    // The latest deposits, so admins can spot ones that need attention.
+    const { data: recentDeposits, error: recentDepositsError } = await supabase
+      .from("crypto_deposits")
+      .select(
+        "order_id, asset, price_usd, status, credited, credited_amount, created_at, profiles:user_id ( username, first_name, last_name )"
+      )
+      .not("status", "in", "(failed,pending,waiting)")
+      .order("created_at", { ascending: false })
+      .limit(8);
+
+    if (recentDepositsError) {
+      console.error("Dashboard recent deposits error:", recentDepositsError);
+    }
+
     const stats = {
+      ...extra,
       usdtSpent: Number(usdtSpent.toFixed(4)),
       totalUsers: totalUsers || 0,
       activeUsers: activeUsers || 0,
@@ -356,6 +380,8 @@ export async function getAdminDashboard(req, res) {
       stats,
 
       recentOrders: addOrderCode(recentOrders || []),
+
+      recentDeposits: recentDeposits || [],
     });
   } catch (error) {
     console.error(
