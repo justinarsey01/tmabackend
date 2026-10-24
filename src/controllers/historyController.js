@@ -17,17 +17,14 @@ function firstRelation(value) {
 
 /*
 |--------------------------------------------------------------------------
-| GET /api/orders/history  (Telegram auth)
-| One merged, newest-first list of the user's:
+| Builds the merged, newest-first history of one user:
 |   - Coin-paid SMM orders
 |   - Crypto-paid SMM orders
-|   - Crypto deposits
+|   - Crypto deposits (paid ones only) and refunds
+| Used by the user's own History and by the admin "user details" view.
 |--------------------------------------------------------------------------
 */
-export async function getTransactionHistory(req, res) {
-  try {
-    const profile = await getActiveProfileFromRequest(req);
-
+export async function buildHistoryForUser(userId) {
     const [ordersResult, depositsResult, refundsResult] = await Promise.all([
       supabase
         .from("smm_orders")
@@ -45,14 +42,14 @@ export async function getTransactionHistory(req, res) {
           created_at,
           smm_services:service_id ( name )
         `)
-        .eq("user_id", profile.id)
+        .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(100),
 
       supabase
         .from("crypto_deposits")
         .select("order_id, asset, price_usd, status, credited, credited_amount, created_at")
-        .eq("user_id", profile.id)
+        .eq("user_id", userId)
         .not("status", "in", "(failed,pending,waiting)") // hide unpaid invoices
         .order("created_at", { ascending: false })
         .limit(50),
@@ -60,7 +57,7 @@ export async function getTransactionHistory(req, res) {
       supabase
         .from("crypto_wallet_transactions")
         .select("reference, asset, amount, created_at")
-        .eq("user_id", profile.id)
+        .eq("user_id", userId)
         .eq("type", "refund")
         .order("created_at", { ascending: false })
         .limit(50),
@@ -137,6 +134,19 @@ export async function getTransactionHistory(req, res) {
     const items = [...orderItems, ...depositItems, ...refundItems]
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
       .slice(0, 100);
+
+    return items;
+}
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/orders/history  (Telegram auth)
+|--------------------------------------------------------------------------
+*/
+export async function getTransactionHistory(req, res) {
+  try {
+    const profile = await getActiveProfileFromRequest(req);
+    const items = await buildHistoryForUser(profile.id);
 
     return res.json({ success: true, items });
   } catch (error) {

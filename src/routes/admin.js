@@ -19,10 +19,12 @@ import {
   createService,
   updateService,
   deleteService,
+  getAdminUserDetails,
 
   getAdminOrders,
   updateAdminOrderStatus,
 } from "../controllers/adminController.js";
+import { sendUserNotification } from "../controllers/notificationController.js";
 
 import {
   getAdminTasks,
@@ -120,6 +122,18 @@ router.delete(
   deleteService
 );
 
+// Send a Telegram message to users (all, one user, or a test to the admin).
+router.post(
+  "/notifications/send",
+  sendUserNotification
+);
+
+// Balance (coins + USDT) and history of one user.
+router.get(
+  "/users/:id/details",
+  getAdminUserDetails
+);
+
 
 /*
 |--------------------------------------------------------------------------
@@ -191,10 +205,5 @@ router.patch(
   updateAdminOrderStatus
 );
 
-/*
-|--------------------------------------------------------------------------
-| ORDERS remove later
-|--------------------------------------------------------------------------
-*/
 
 export default router;

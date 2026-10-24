@@ -1,3 +1,4 @@
+import { notifyNewOrder, notifyOrderStatus, notifyUserById, withTimeout } from "../lib/notify.js";
 import "dotenv/config";
 import crypto from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
@@ -279,7 +280,7 @@ export async function nowPaymentsIpn(req, res) {
 
     const { data: deposit, error: findError } = await supabase
       .from("crypto_deposits")
-      .select("order_id, asset, credited")
+      .select("order_id, user_id, asset, credited")
       .eq("order_id", orderId)
       .maybeSingle();
     if (findError) throw findError;
@@ -351,6 +352,15 @@ export async function nowPaymentsIpn(req, res) {
       p_status: status,
     });
     if (creditError) throw creditError;
+
+    await withTimeout(
+      notifyUserById(
+        deposit.user_id,
+        `✅ <b>Deposit confirmed</b>\n$${amount.toLocaleString("en-US", {
+          maximumFractionDigits: 4,
+        })} USDT was added to your wallet.`
+      )
+    );
 
     return res.json({ success: true, credited: true });
   } catch (error) {

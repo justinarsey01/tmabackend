@@ -1,4 +1,6 @@
-﻿import dotenv from "dotenv";
+﻿import { notifyNewOrder, notifyOrderStatus, notifyUserById, withTimeout } from "../lib/notify.js";
+import { buildHistoryForUser } from "./historyController.js";
+import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
@@ -55,7 +57,7 @@ export async function getAdminDashboard(req, res) {
     } = await supabase
       .from("profiles")
       .select("id", {
-        count: "totalUsers",
+        count: "exact",
         head: true,
       });
 
@@ -1565,6 +1567,11 @@ export async function updateAdminOrderStatus(
       cryptoRefunded = refunded === true;
     }
 
+    // Let the customer know about the new status.
+    await withTimeout(
+      notifyOrderStatus(id, status)
+    );
+
     return res.json({
       success: true,
 
@@ -2204,6 +2211,85 @@ export async function deleteService(req, res) {
     return res.status(500).json({
       success: false,
       message: error.message || "Server error while deleting service",
+    });
+  }
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/admin/users/:id/details
+| Balance (coins + USDT) and full transaction history of one user.
+|--------------------------------------------------------------------------
+*/
+
+export async function getAdminUserDetails(req, res) {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID is required",
+      });
+    }
+
+    const { data: user, error: userError } = await supabase
+      .from("profiles")
+      .select(
+        "id, telegram_id, username, first_name, last_name, balance, total_earned, total_spent, is_active, is_admin, created_at"
+      )
+      .eq("id", id)
+      .maybeSingle();
+
+    if (userError) throw userError;
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // The wallet row only exists after a user's first crypto action.
+    const { data: wallet, error: walletError } = await supabase
+      .from("crypto_wallets")
+      .select("usdtbsc_balance")
+      .eq("user_id", id)
+      .maybeSingle();
+
+    if (walletError) {
+      console.error("Admin user wallet lookup error:", walletError);
+    }
+
+    const history = await buildHistoryForUser(id);
+
+    const totalDeposited = history
+      .filter(
+        (item) =>
+          item.kind === "crypto_deposit" &&
+          item.credited &&
+          item.amount != null
+      )
+      .reduce((sum, item) => sum + Number(item.amount), 0);
+
+    return res.json({
+      success: true,
+      user,
+      usdt: {
+        balance: Number(wallet?.usdtbsc_balance ?? 0),
+        totalDeposited,
+      },
+      history,
+    });
+  } catch (error) {
+    console.error("Admin user details error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message:
+        error.message ||
+        "Could not load this user's details",
     });
   }
 }

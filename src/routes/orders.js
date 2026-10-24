@@ -12,6 +12,7 @@ import {
 } from "../controllers/cryptoDepositController.js";
 import { getTransactionHistory } from "../controllers/historyController.js";
 import { createChannelCopyOrder } from "../controllers/copyOrderController.js";
+import { getRecentOrders } from "../controllers/notificationController.js";
 
 const router = express.Router();
 
@@ -27,6 +28,9 @@ router.post("/crypto/ipn", nowPaymentsIpn);
 
 // Combined history of coin orders, crypto orders and crypto deposits.
 router.get("/history", telegramAuth, getTransactionHistory);
+
+// Real, anonymised recent orders for the "live orders" popup.
+router.get("/recent", telegramAuth, getRecentOrders);
 
 // Channel copy service (source channel -> up to N target channels).
 router.post("/copy", telegramAuth, createChannelCopyOrder);

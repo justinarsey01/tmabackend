@@ -1,3 +1,4 @@
+import { notifyNewOrder, notifyOrderStatus, notifyUserById, withTimeout } from "../lib/notify.js";
 import "dotenv/config";
 import { parse } from "@tma.js/init-data-node";
 import { createClient } from "@supabase/supabase-js";
@@ -208,6 +209,8 @@ export async function createCryptoSmmOrder(req, res) {
       .eq("user_id", profile.id)
       .single();
     if (freshWalletError) throw freshWalletError;
+
+    await withTimeout(notifyNewOrder(result.id));
 
     return res.status(201).json({
       success: true,

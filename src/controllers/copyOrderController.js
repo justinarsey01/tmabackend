@@ -1,3 +1,4 @@
+import { notifyNewOrder, notifyOrderStatus, notifyUserById, withTimeout } from "../lib/notify.js";
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { getActiveProfileFromRequest } from "./cryptoOrderController.js";
@@ -133,6 +134,8 @@ export async function createChannelCopyOrder(req, res) {
 
     const result = Array.isArray(data) ? data[0] : data;
     if (!result) throw new Error("Order transaction returned no result.");
+
+    await withTimeout(notifyNewOrder(result.id));
 
     return res.status(201).json({
       success: true,

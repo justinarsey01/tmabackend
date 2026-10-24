@@ -1,3 +1,4 @@
+import { notifyNewOrder, notifyOrderStatus, notifyUserById, withTimeout } from "../lib/notify.js";
 import dotenv from "dotenv";
 import { parse } from "@tma.js/init-data-node";
 import { createClient } from "@supabase/supabase-js";
@@ -255,6 +256,11 @@ export async function createSmmOrder(req, res) {
     | Return result
     |--------------------------------------------------------------------------
     */
+
+    // Tell the admins a new order is waiting (never blocks the order).
+    await withTimeout(
+      notifyNewOrder(result.order_id)
+    );
 
     return res.json({
 
