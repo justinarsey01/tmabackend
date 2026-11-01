@@ -85,9 +85,55 @@ async function saveDeliveries(notificationId, deliveries, sent, failed) {
   }
 }
 
+// Turns Telegram's error text into a reason the admin can act on.
+function classifyFailure(result) {
+  const text = String(result.error || "").toLowerCase();
+
+  if (text.includes("blocked by the user")) return "blocked";
+
+  if (
+    text.includes("chat not found") ||
+    text.includes("initiate conversation")
+  ) {
+    return "never_started";
+  }
+
+  if (text.includes("deactivated")) return "deactivated";
+
+  if (result.code === 429 || text.includes("too many requests")) {
+    return "rate_limited";
+  }
+
+  return "other";
+}
+
+// If Telegram says "slow down", wait the time it asks for and try once more.
+async function sendWithRetry(botToken, chatId, message) {
+  // Plain text on purpose: no formatting can break the message.
+  let result = await sendTelegramMessage(botToken, chatId, message, {
+    html: false,
+  });
+
+  if (
+    !result.ok &&
+    result.code === 429 &&
+    result.retryAfter &&
+    result.retryAfter <= 5
+  ) {
+    await sleep((result.retryAfter + 0.3) * 1000);
+
+    result = await sendTelegramMessage(botToken, chatId, message, {
+      html: false,
+    });
+  }
+
+  return result;
+}
+
 // Sends to a list of chats, at most PER_SECOND per second.
 async function sendBatch(botToken, chatIds, message) {
   const deliveries = [];
+  const reasons = {};
   let sent = 0;
   let failed = 0;
   let lastError = "";
@@ -96,10 +142,7 @@ async function sendBatch(botToken, chatIds, message) {
     const chunk = chatIds.slice(index, index + PER_SECOND);
 
     const results = await Promise.all(
-      // Plain text on purpose: no formatting can break the message.
-      chunk.map((chatId) =>
-        sendTelegramMessage(botToken, chatId, message, { html: false })
-      )
+      chunk.map((chatId) => sendWithRetry(botToken, chatId, message))
     );
 
     results.forEach((result, position) => {
@@ -115,6 +158,9 @@ async function sendBatch(botToken, chatIds, message) {
       } else {
         failed += 1;
         lastError = result.error || lastError;
+
+        const reason = classifyFailure(result);
+        reasons[reason] = (reasons[reason] || 0) + 1;
       }
     });
 
@@ -123,7 +169,7 @@ async function sendBatch(botToken, chatIds, message) {
     }
   }
 
-  return { sent, failed, deliveries, lastError };
+  return { sent, failed, deliveries, lastError, reasons };
 }
 
 /*
@@ -264,6 +310,13 @@ export async function sendUserNotification(req, res) {
     const result = await sendBatch(botToken, chatIds, message);
     const failed = result.failed + missing;
 
+    const reasons = { ...result.reasons };
+    if (missing > 0) reasons.not_found = missing;
+
+    if (failed > 0) {
+      console.warn("Notification not delivered to some users:", reasons);
+    }
+
     await saveDeliveries(notificationId, result.deliveries, result.sent, failed);
 
     if (audience === "me" && result.sent === 0) {
@@ -277,6 +330,7 @@ export async function sendUserNotification(req, res) {
       success: true,
       sent: result.sent,
       failed,
+      reasons,
       total,
       nextOffset,
       done,

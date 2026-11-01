@@ -81,6 +81,8 @@ export async function sendTelegramMessage(
       return {
         ok: false,
         error: data.description || `HTTP ${response.status}`,
+        code: data.error_code || response.status,
+        retryAfter: data.parameters?.retry_after ?? null,
       };
     }
 
